@@ -1,0 +1,11 @@
+.board {
+
+    margin-top: 160px; /* Начинаем под header и navbar */
+    margin-left: 200px; /* Отступ для sidebar */
+    width: calc(100% - 200px); /* Ширина минус sidebar */
+    height: calc(100vh - 160px); /* Высота минус header и navbar */
+    display: flex;
+    flex-direction: column;
+    /*overflow-y: auto; /* Включаем скролл только для рабочей области */
+    background-color: white; /* Для наглядности */
+}

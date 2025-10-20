@@ -1,0 +1,10 @@
+.sidebar {
+    position: fixed;
+    top: 80px; /* Размещаем под navbar (80px + 80px) */
+    left: 0;
+    background-color: white;
+    border-right: 1px solid #272727;
+    width: 200px;
+    height: 100%; /* Высота минус header и navbar */
+    z-index: 1000;
+}
