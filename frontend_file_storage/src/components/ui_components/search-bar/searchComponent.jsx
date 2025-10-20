@@ -1,6 +1,3 @@
-import React from 'react'
-
-import React from 'react';
 
 const SearchComponent = () => {
   const searchStyles = {
@@ -30,7 +27,6 @@ const SearchComponent = () => {
 
   return (
     <label style={searchStyles.container}>
-      <span style={searchStyles.icon}>🔍</span>
       <input 
         type="text" 
         placeholder="Поиск" 
