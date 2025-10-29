@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Вход - File Storage{% endblock %}
+
+{% block content %}
+<div class="form-group">
+    <h2>🔑 Вход в систему</h2>
+    <p>Введите ваши учетные данные</p>
+</div>
+
+<form method="POST" action="/login">
+    <div class="form-group">
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" required placeholder="your@email.com">
+    </div>
+    
+    <div class="form-group">
+        <label for="password">Пароль:</label>
+        <input type="password" id="password" name="password" required placeholder="Введите пароль">
+    </div>
+    
+    <div class="form-group">
+        <button type="submit" class="btn">Войти</button>
+    </div>
+</form>
+
+<div class="links">
+    <a href="/register">Нет аккаунта? Зарегистрируйтесь</a> | 
+    <a href="/">На главную</a>
+</div>
+{% endblock %}
