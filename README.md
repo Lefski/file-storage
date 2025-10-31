@@ -8,3 +8,6 @@ for windows:
 pip install -r req.txt
 for linux/mac:
 pip3 install -r req.txt
+
+
+compile and start progect: uvicorn main:app --reload   
