@@ -3,8 +3,9 @@
 # Также импортируем модули для работы с базой данных, моделями и утилитами аутентификации.
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy.orm import Session
 import models
 import auth_utils
@@ -21,6 +22,38 @@ templates = Jinja2Templates(directory="templates")
 
 # Создаём объект для работы с HTTP Bearer авторизацией.
 security = HTTPBearer()
+
+# Обработчики исключений
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = []
+    for error in exc.errors():
+        # Получаем поле с ошибкой (игнорируем "body" в начале)
+        loc = error["loc"]
+        if len(loc) > 1 and loc[0] == "body":
+            field = " -> ".join(str(loc) for loc in loc[1:])
+        else:
+            field = " -> ".join(str(loc) for loc in loc)
+        
+        errors.append(f"{field}: {error['msg']}")
+    
+    error_message = "; ".join(errors)
+    
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": error_message
+        }
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail
+        }
+    )
 
 # --- HTML-страницы ---
 
