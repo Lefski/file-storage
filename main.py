@@ -26,13 +26,13 @@ security = HTTPBearer()
 
 # Обработчик GET-запроса на корневой путь ("/").
 # Возвращает главную страницу (index.html) с использованием шаблона Jinja2.
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse, tags=["Страницы"])
 async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 # Обработчик GET-запроса на страницу входа ("/login").
 # Возвращает страницу входа (login.html).
-@app.get("/login", response_class=HTMLResponse)
+@app.get("/login", response_class=HTMLResponse, tags=["Страницы"])
 async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
@@ -110,7 +110,7 @@ async def login_form(
 
 # Обработчик GET-запроса на страницу регистрации ("/register").
 # Возвращает страницу регистрации (register.html).
-@app.get("/register", response_class=HTMLResponse)
+@app.get("/register", response_class=HTMLResponse, tags=["Страницы"])
 async def register_page(request: Request):
     return templates.TemplateResponse("register.html", {"request": request})
 
@@ -205,7 +205,7 @@ async def register_form(
 
 # Обработчик GET-запроса на страницу профиля ("/profile").
 # Проверяет токен доступа и возвращает страницу профиля с данными пользователя.
-@app.get("/profile", response_class=HTMLResponse)
+@app.get("/profile", response_class=HTMLResponse, tags=["Страницы"])
 async def profile_page(request: Request, db: Session = Depends(get_db)):
     # Получаем токен доступа из cookies.
     token = request.cookies.get("access_token")
