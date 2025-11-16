@@ -3,6 +3,6 @@ import "./Board.css"
 
 export default function Board() {
   return (
-    <div class="board">Beeeeerd</div>
+    <div class="board"></div>
   )
 }
