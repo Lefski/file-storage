@@ -1,16 +1,26 @@
 # Импортируем необходимые модули и классы из FastAPI для создания API,
 # работы с зависимостями, обработки ошибок, работы с HTTP-запросами и шаблонами.
 # Также импортируем модули для работы с базой данных, моделями и утилитами аутентификации.
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Form
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Form, UploadFile, Query
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func
 import models
 import auth_utils
 from database import get_db
 from models import UserCreate, UserLogin, UserResponse, Token, UserRole
 from datetime import timedelta
+from typing import List, Optional, Callable
+from file_models import Files, FileInfoResponse, FileRename, Folder, FolderCreate, FolderResponse, FileMove
+from chain_of_duties import (AuthCheckHandler, QuotaCheckHandler, FileTypeCheckHandler, FolderCheckHandler, SaveFileHandler,
+    AuthDeleteCheckHandler, FileAccessCheckHandler, DeleteFileHandler,
+    AuthFolderCheckHandler, NameFolderCheckHandler, ParentFolderCheckHandler, CreateFolderHandler,
+    AuthMoveCheckHandler, FileMoveCheckHandler, FolderMoveCheckHandler, UpdateMoveHandler)
+import file_utils
+import os
+import shutil
 
 # Создаём экземпляр FastAPI с указанием метаданных (название и версия API).
 app = FastAPI(title="File Storage Auth API", version="1.0.0")
@@ -21,6 +31,42 @@ templates = Jinja2Templates(directory="templates")
 
 # Создаём объект для работы с HTTP Bearer авторизацией.
 security = HTTPBearer()
+
+@app.middleware("http")
+async def add_user_to_request(request: Request, call_next: Callable):
+    # Получаем пользователя и добавляем его в request.state
+    db = next(get_db())
+    try:
+        user = get_current_user(request, db)
+        request.state.user = user
+        request.state.db = db
+        response = await call_next(request)
+        return response
+    except Exception as e:
+        # В случае ошибки все равно продолжаем
+        request.state.user = None
+        request.state.db = db
+        response = await call_next(request)
+        return response
+    finally:
+        db.close()
+
+def get_current_user(request: Request, db: Session = Depends(get_db)):
+    
+    token = request.cookies.get("access_token")
+    if not token:
+        return None
+
+    payload = auth_utils.verify_token(token)
+    if not payload:
+        return None
+
+    email = payload.get("sub")
+    if not email:
+        return None
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    return user
 
 # --- HTML-страницы ---
 
@@ -205,51 +251,87 @@ async def register_form(
 
 # Обработчик GET-запроса на страницу профиля ("/profile").
 # Проверяет токен доступа и возвращает страницу профиля с данными пользователя.
+# Обработчик GET-запроса на страницу профиля ("/profile").
+# Проверяет токен доступа и возвращает страницу профиля с данными пользователя.
 @app.get("/profile", response_class=HTMLResponse)
-async def profile_page(request: Request, db: Session = Depends(get_db)):
-    # Получаем токен доступа из cookies.
-    token = request.cookies.get("access_token")
-    token_invalid = token is None  # Флаг: токен отсутствует
-
-    # Если токен отсутствует, перенаправляем на страницу входа.
-    if token_invalid:
+async def profile_page(
+    request: Request, 
+    db: Session = Depends(get_db),
+    search: str = Query(None),
+    folder_id: int = Query(None)
+):
+    user = get_current_user(request, db)
+    if not user:
         return RedirectResponse(url="/login")
 
-    # Проверяем валидность токена.
-    payload = auth_utils.verify_token(token)
-    payload_invalid = payload is None  # Флаг: токен невалиден
+    # Получаем папки пользователя
+    folders = db.query(Folder).filter(Folder.user_id == user.id).all()
+    
+    # Получаем файлы с учетом поиска и папки
+    query = db.query(Files).filter(Files.user_id == user.id)
+    
+    if search and search.strip():
+        # Поиск по всем файлам пользователя независимо от папки
+        search_term = f"%{search.strip()}%"
+        query = query.filter(Files.filename.ilike(search_term))
+        # Если идет поиск, игнорируем folder_id и показываем все найденные файлы
+        files = query.all()
+        current_folder = None
+        search_mode = True
+    else:
+        # Обычный режим - файлы в конкретной папке
+        if folder_id:
+            query = query.filter(Files.folder_id == folder_id)
+            current_folder = db.query(Folder).filter(Folder.id == folder_id, Folder.user_id == user.id).first()
+        else:
+            query = query.filter(Files.folder_id.is_(None))
+            current_folder = None
+        files = query.all()
+        search_mode = False
 
-    # Если токен невалиден, удаляем cookie и перенаправляем на страницу входа.
-    if payload_invalid:
-        response = RedirectResponse(url="/login")
-        response.delete_cookie("access_token")
-        return response
+    # Рассчитываем статистику использования пространства
+    total_files_count = db.query(Files).filter(Files.user_id == user.id).count()
+    total_folders_count = len(folders)
+    
+    # Убедимся, что у пользователя есть квота (если нет - установим 1 ГБ)
+    if not user.quota:
+        user.quota = 1024 * 1024 * 1024  # 1 ГБ
+        db.commit()
+    
+    if not user.used_space:
+        user.used_space = 0
+        db.commit()
 
-    # Получаем email пользователя из токена.
-    email = payload.get("sub")
-    email_invalid = email is None  # Флаг: email отсутствует в токене
-
-    # Если email отсутствует, удаляем cookie и перенаправляем на страницу входа.
-    if email_invalid:
-        response = RedirectResponse(url="/login")
-        response.delete_cookie("access_token")
-        return response
-
-    # Ищем пользователя в базе данных по email.
-    user = db.query(models.User).filter(models.User.email == email).first()
-    user_invalid = user is None  # Флаг: пользователь не найден
-
-    # Если пользователь не найден, удаляем cookie и перенаправляем на страницу входа.
-    if user_invalid:
-        response = RedirectResponse(url="/login")
-        response.delete_cookie("access_token")
-        return response
+    # Рассчитываем проценты для прогресс-бара
+    used_gb = round(user.used_space / (1024 * 1024 * 1024), 2)
+    total_gb = round(user.quota / (1024 * 1024 * 1024), 2)
+    used_percent = round((user.used_space / user.quota) * 100, 1) if user.quota > 0 else 0
+    
+    # Определяем класс для прогресс-бара
+    if used_percent < 70:
+        progress_class = "bg-success"
+    elif used_percent < 90:
+        progress_class = "bg-warning"
+    else:
+        progress_class = "bg-danger"
 
     # Возвращаем страницу профиля с данными пользователя.
     return templates.TemplateResponse("profile.html", {
         "request": request,
-        "user": user
+        "user": user,
+        "files": files,
+        "folders": folders,
+        "search_query": search,
+        "current_folder": current_folder,
+        "search_mode": search_mode,
+        "total_files_count": total_files_count,
+        "total_folders_count": total_folders_count,
+        "used_gb": used_gb,
+        "total_gb": total_gb,
+        "used_percent": used_percent,
+        "progress_class": progress_class
     })
+
 
 # Обработчик GET-запроса на выход ("/logout").
 # Удаляет cookie с токеном и перенаправляет на главную страницу.
@@ -306,6 +388,259 @@ async def api_register(user_data: UserCreate, db: Session = Depends(get_db)):
 
     # Возвращаем данные созданного пользователя.
     return db_user
+
+@app.post("/profile/upload")
+async def upload_profile_file(
+    request: Request,
+    file: UploadFile = UploadFile(...),
+    folder_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db)
+):
+    try:
+        # обьявление операций цепи пользователя
+        auth_handler = AuthCheckHandler()
+        quota_handler = QuotaCheckHandler()
+        file_type_handler = FileTypeCheckHandler()
+        folder_handler = FolderCheckHandler()
+        save_handler = SaveFileHandler()
+
+        # обьявление цепи
+        auth_handler.next_handler = quota_handler
+        quota_handler.next_handler = file_type_handler
+        file_type_handler.next_handler = folder_handler
+        folder_handler.next_handler = save_handler
+
+        # запуск цепи
+        result = auth_handler.handle(request, file, folder_id, db)
+
+        # Перенаправляем на страницу профиля
+        redirect_url = f"/profile?folder_id={folder_id}" if folder_id else "/profile"
+        return RedirectResponse(url=redirect_url, status_code=303)
+
+    except HTTPException as e:
+        redirect_url = f"/profile?folder_id={folder_id}" if folder_id else "/profile"
+        return RedirectResponse(url=redirect_url, status_code=303)
+
+    
+    except Exception as e:
+        db.rollback()
+        # В случае ошибки возвращаем на страницу профиля
+        redirect_url = f"/profile?folder_id={folder_id}" if folder_id else "/profile"
+        return RedirectResponse(url=redirect_url, status_code=303)
+
+
+# изменение имени файла пользователя
+@app.post("/profile/rename/{file_id}", response_class=RedirectResponse)
+async def rename_profile_file(
+    file_id: int,
+    request: Request,
+    new_filename: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login")
+
+    file = db.query(Files).filter(Files.id == file_id, Files.user_id == user.id).first()
+    if not file:
+        return RedirectResponse(url="/profile", status_code=303)
+
+    if not new_filename:
+        return RedirectResponse(url="/profile", status_code=303)
+
+    file_dir = os.path.dirname(file.file_path)
+    new_file_path = os.path.join(file_dir, new_filename)
+
+    file_utils.rename_file_on_disk(file.file_path, new_file_path)
+
+    file.filename = new_filename
+    file.file_path = new_file_path
+    file.updated_at = func.now()
+
+    db.commit()
+
+    return RedirectResponse(url="/profile", status_code=303)
+
+# Скачивание файла пользователя
+@app.get("/profile/download/{file_id}")
+async def download_profile_file(
+    file_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Не авторизован")
+
+    file = db.query(Files).filter(Files.id == file_id, Files.user_id == user.id).first()
+    if not file:
+        raise HTTPException(status_code=404, detail="Файл не найден")
+
+    if not os.path.exists(file.file_path):
+        raise HTTPException(status_code=404, detail="Файл не найден на сервере")
+
+    # Возвращаем файл для скачивания
+    return FileResponse(
+        path=file.file_path,
+        filename=file.filename,
+        media_type='application/octet-stream'
+    )
+
+# Создание новой папки
+@app.post("/profile/folders/create")
+async def create_folder(
+    request: Request,
+    name: str = Form(...),
+    parent_folder_id: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
+    try:
+        # Обрабатываем parent_folder_id (может быть пустой строкой)
+        target_parent_folder_id = None
+        if parent_folder_id and parent_folder_id.strip():
+            try:
+                folder_id_int = int(parent_folder_id)
+                target_parent_folder_id = folder_id_int
+            except ValueError:
+                pass
+
+        # Создаём цепочку обработчиков
+        auth_folder_handler = AuthFolderCheckHandler()
+        name_folder_handler = NameFolderCheckHandler()
+        parent_folder_handler = ParentFolderCheckHandler()
+        create_folder_handler = CreateFolderHandler()
+
+        # Собираем цепочку
+        auth_folder_handler.next_handler = name_folder_handler
+        name_folder_handler.next_handler = parent_folder_handler
+        parent_folder_handler.next_handler = create_folder_handler
+
+        # Запускаем цепочку
+        result = auth_folder_handler.handle(request, name, target_parent_folder_id, db)
+
+        # Перенаправляем на страницу профиля
+        redirect_url = f"/profile?folder_id={target_parent_folder_id}" if target_parent_folder_id else "/profile"
+        return RedirectResponse(url=redirect_url, status_code=303)
+
+    except HTTPException as e:
+        redirect_url = f"/profile?folder_id={target_parent_folder_id}" if target_parent_folder_id else "/profile"
+        return RedirectResponse(url=redirect_url, status_code=303)
+
+
+# Удаление файла
+@app.post("/profile/delete/{file_id}", response_class=RedirectResponse)
+async def delete_file(
+    file_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    try:
+         # обьявление операций цепи пользователя
+        auth_delete_handler = AuthDeleteCheckHandler()
+        access_delete_handler = FileAccessCheckHandler()
+        delete_file_handler = DeleteFileHandler()
+
+        # сборка цепи
+        auth_delete_handler.next_handler = access_delete_handler
+        access_delete_handler.next_handler = delete_file_handler
+
+        # запуск цепи
+        result = auth_delete_handler.handle(request, file_id, db)
+
+        # Перенаправляем на страницу профиля
+        return RedirectResponse(url="/profile", status_code=303)
+
+    except HTTPException as e:
+        return RedirectResponse(url="/profile", status_code=303)
+
+# Удаление папки
+@app.post("/profile/folders/delete/{folder_id}", response_class=RedirectResponse)
+async def delete_folder(
+    folder_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login")
+
+    folder = db.query(Folder).filter(Folder.id == folder_id, Folder.user_id == user.id).first()
+    if not folder:
+        return RedirectResponse(url="/profile", status_code=303)
+
+    # Нельзя удалить корневую папку
+    if folder.name == "Корневая папка":
+        return RedirectResponse(url="/profile", status_code=303)
+
+    # Удаляем все файлы в папке
+    files = db.query(Files).filter(Files.folder_id == folder_id).all()
+    for file in files:
+        if os.path.exists(file.file_path):
+            os.remove(file.file_path)
+        db.delete(file)
+
+    # Удаляем подпапки рекурсивно
+    subfolders = db.query(Folder).filter(Folder.parent_folder_id == folder_id).all()
+    for subfolder in subfolders:
+        # Рекурсивно удаляем подпапки
+        await delete_folder_internal(subfolder.id, user.id, db)
+
+    # Удаляем саму папку
+    db.delete(folder)
+    db.commit()
+
+    return RedirectResponse(url="/profile", status_code=303)
+
+async def delete_folder_internal(folder_id: int, user_id: int, db: Session):
+    """Внутренняя функция для рекурсивного удаления папок"""
+    # Удаляем файлы в папке
+    files = db.query(Files).filter(Files.folder_id == folder_id).all()
+    for file in files:
+        if os.path.exists(file.file_path):
+            os.remove(file.file_path)
+        db.delete(file)
+
+    # Удаляем подпапки
+    subfolders = db.query(Folder).filter(Folder.parent_folder_id == folder_id).all()
+    for subfolder in subfolders:
+        await delete_folder_internal(subfolder.id, user_id, db)
+
+    # Удаляем саму папку
+    folder = db.query(Folder).filter(Folder.id == folder_id).first()
+    if folder:
+        db.delete(folder)
+
+
+
+
+@app.post("/api/move-file")
+async def move_file(
+    request: Request,
+    move_data: FileMove,
+    db: Session = Depends(get_db)
+):
+    try:
+        # Создаём цепочку обработчиков
+        auth_move_handler = AuthMoveCheckHandler()
+        file_move_handler = FileMoveCheckHandler()
+        folder_move_handler = FolderMoveCheckHandler()
+        update_move_handler = UpdateMoveHandler()
+
+        # Собираем цепочку
+        auth_move_handler.next_handler = file_move_handler
+        file_move_handler.next_handler = folder_move_handler
+        folder_move_handler.next_handler = update_move_handler
+
+        # Запускаем цепочку
+        result = auth_move_handler.handle(request, move_data, db)
+
+        # Возвращаем успешный ответ
+        return {"message": "Файл успешно перемещен"}
+
+    except HTTPException as e:
+        raise e
+
+
 
 # Обработчик POST-запроса на вход пользователя через API ("/api/login").
 # Принимает данные пользователя, проверяет их и возвращает токен доступа.

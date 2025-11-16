@@ -1,24 +1,454 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Профиль - {{ user.username }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .file-card, .folder-card {
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .file-card:hover, .folder-card:hover {
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            transform: translateY(-2px);
+        }
+        .file-actions, .folder-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .drag-over {
+            background-color: #e9ecef;
+            border: 2px dashed #007bff;
+        }
+        .breadcrumb {
+            background: none;
+            padding: 0;
+        }
+        .search-box {
+            max-width: 300px;
+        }
+        .folder-icon {
+            color: #ffc107;
+        }
+        .file-icon {
+            color: #6c757d;
+        }
+        .drop-zone {
+            border: 2px dashed #dee2e6;
+            border-radius: 0.375rem;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+        .drop-zone.drag-over {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">File Storage</a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text me-3">
+                    Привет, {{ user.username }}!
+                </span>
+                <a class="nav-link" href="/logout">Выйти</a>
+            </div>
+        </div>
+    </nav>
 
-{% block title %}Профиль - File Storage{% endblock %}
+    <div class="container mt-4">
+        <div class="row">
+            <!-- Боковая панель с папками -->
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">Папки</h5>
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createFolderModal">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="folders-tree">
+                            <a href="/profile" class="d-block py-1 text-decoration-none {% if not current_folder %}fw-bold text-primary{% endif %}">
+                                <i class="fas fa-home me-2"></i>Все файлы
+                            </a>
+                            {% for folder in folders %}
+                            <div class="folder-item d-flex justify-content-between align-items-center">
+                                <a href="/profile?folder_id={{ folder.id }}" 
+                                   class="d-block py-1 text-decoration-none flex-grow-1 {% if current_folder and current_folder.id == folder.id %}fw-bold text-primary{% endif %}">
+                                    <i class="fas fa-folder me-2 folder-icon"></i>{{ folder.name }}
+                                </a>
+                                {% if folder.name != "Корневая папка" %}
+                                <form action="/profile/folders/delete/{{ folder.id }}" method="post" class="ms-2">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Удалить папку и все файлы внутри?')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
 
-{% block content %}
-<div class="form-group">
-    <h2>👤 Ваш профиль</h2>
-    <p>Информация о вашем аккаунте</p>
-</div>
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Информация о профиле</h5>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Email:</strong> {{ user.email }}</p>
+                        <p><strong>Имя пользователя:</strong> {{ user.username }}</p>
+                        <p><strong>Роль:</strong> {{ user.role }}</p>
+                        <p><strong>Статус:</strong> 
+                            {% if user.is_active %}
+                                <span class="text-success">Активен</span>
+                            {% else %}
+                                <span class="text-danger">Неактивен</span>
+                            {% endif %}
+                        </p>
+                        <p><strong>Зарегистрирован:</strong> {{ user.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
+                    </div>
+                </div>
+            </div>
 
-<div class="user-info">
-    <p><strong>ID:</strong> {{ user.id }}</p>
-    <p><strong>Имя пользователя:</strong> {{ user.username }}</p>
-    <p><strong>Email:</strong> {{ user.email }}</p>
-    <p><strong>Роль:</strong> {{ user.role }}</p>
-    <p><strong>Статус:</strong> {{ "Активен" if user.is_active else "Неактивен" }}</p>
-    <p><strong>Дата регистрации:</strong> {{ user.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
-</div>
+            <!-- Основной контент -->
+            <div class="col-md-9">
+                
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="/profile">Главная</a></li>
+                            {% if current_folder %}
+                            <li class="breadcrumb-item active">{{ current_folder.name }}</li>
+                            {% endif %}
+                        </ol>
+                    </nav>
+                    
+                    <form class="d-flex search-box" method="get" action="/profile">
+                        {% if current_folder %}
+                        <input type="hidden" name="folder_id" value="{{ current_folder.id }}">
+                        {% endif %}
+                        <input type="text" 
+                               name="search" 
+                               class="form-control me-2" 
+                               placeholder="Поиск файлов..."
+                               value="{{ search_query or '' }}">
+                        <button type="submit" class="btn btn-outline-primary">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </form>
+                </div>
+                
+                <h2>
+                    {% if current_folder %}
+                        {{ current_folder.name }}
+                    {% else %}
+                        Все файлы
+                    {% endif %}
+                </h2>
+                
+                <!-- Форма загрузки файла -->
 
-<div class="form-group">
-    <button class="btn" onclick="window.location.href='/'">На главную</button>
-    <button class="btn" onclick="window.location.href='/logout'" style="background: #dc3545;">Выйти</button>
-</div>
-{% endblock %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Загрузить файлы</h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="/profile/upload" method="post" enctype="multipart/form-data" id="uploadForm">
+                            {% if current_folder %}
+                            <input type="hidden" name="folder_id" value="{{ current_folder.id }}">
+                            {% endif %}
+                            <div class="mb-3">
+                                <input type="file" class="form-control" name="file" id="fileInput" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-upload me-2"></i>Загрузить
+                            </button>
+                        </form>
+                        
+                        <!-- Зона перетаскивания -->
+                        <div class="drop-zone mt-3" id="dropZone">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Перетащите файлы сюда или нажмите для выбора</p>
+                            <small class="text-muted">Поддерживаются любые типы файлов</small>
+                        </div>
+                    </div>
+                </div>
+                                <!-- Компактная статистика в боковой панели -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="fas fa-chart-pie me-2"></i>Дисковое пространство
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <small class="text-muted">Использовано {{ used_percent }}%</small>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar {{ progress_class }}" 
+                                     style="width: {{ used_percent }}%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between small">
+                            <span>{{ used_gb }} ГБ</span>
+                            <span class="text-muted">из {{ total_gb }} ГБ</span>
+                        </div>
+                        
+                        <div class="mt-2 text-center">
+                            <small class="text-muted">
+                                <i class="fas fa-file me-1"></i>{{ total_files_count }} файлов • 
+                                <i class="fas fa-folder me-1"></i>{{ total_folders_count }} папок
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <!-- Список файлов и папок -->
+                {% if files or (folders and not current_folder) %}
+                <div class="files-list" id="filesContainer">
+                    <!-- Папки -->
+                    {% if not current_folder %}
+                        {% for folder in folders %}
+                        <div class="folder-card" draggable="true" data-folder-id="{{ folder.id }}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="folder-info">
+                                    <h6 class="mb-1">
+                                        <i class="fas fa-folder me-2 folder-icon"></i>{{ folder.name }}
+                                    </h6>
+                                    <small class="text-muted">
+                                        Создана: {{ folder.created_at.strftime('%d.%m.%Y %H:%M') }}
+                                    </small>
+                                </div>
+                                <div class="folder-actions">
+                                    <a href="/profile?folder_id={{ folder.id }}" class="btn btn-info btn-sm">
+                                        <i class="fas fa-folder-open"></i>
+                                    </a>
+                                    {% if folder.name != "Корневая папка" %}
+                                    <form action="/profile/folders/delete/{{ folder.id }}" method="post">
+                                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Удалить папку и все файлы внутри?')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <!-- Файлы -->
+                    {% for file in files %}
+                    <div class="file-card" draggable="true" data-file-id="{{ file.id }}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="file-info">
+                                <h6 class="mb-1">
+                                    <i class="fas fa-file me-2 file-icon"></i>{{ file.filename }}
+                                </h6>
+                                <small class="text-muted">
+                                    Размер: {{ (file.file_size / 1024) | round(2) }} KB<br>
+                                    Загружен: {{ file.created_at.strftime('%d.%m.%Y %H:%M') }}
+                                </small>
+                            </div>
+                            <div class="file-actions">
+                                <a href="/profile/download/{{ file.id }}" class="btn btn-success btn-sm" download>
+                                    <i class="fas fa-download"></i>
+                                </a>
+                                
+                                <!-- Форма переименования -->
+                                <form action="/profile/rename/{{ file.id }}" method="post" class="d-flex">
+                                    <input type="text" 
+                                           name="new_filename" 
+                                           value="{{ file.filename }}" 
+                                           class="form-control form-control-sm me-2" 
+                                           style="width: 150px;"
+                                           required>
+                                    <button type="submit" class="btn btn-warning btn-sm">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                </form>
+
+                                <!-- Кнопка удаления -->
+                                <form action="/profile/delete/{{ file.id }}" method="post">
+                                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Удалить файл?')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    {% if current_folder %}
+                        В этой папке пока нет файлов.
+                    {% else %}
+                        У вас пока нет файлов и папок.
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно создания папки -->
+    <div class="modal fade" id="createFolderModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Создать новую папку</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/profile/folders/create" method="post">
+                    <div class="modal-body">
+                        <input type="hidden" name="parent_folder_id" value="{{ current_folder.id if current_folder }}">
+                        <div class="mb-3">
+                            <label for="folderName" class="form-label">Название папки</label>
+                            <input type="text" class="form-control" id="folderName" name="name" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-primary">Создать папку</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Drag & Drop функционал
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+            const uploadForm = document.getElementById('uploadForm');
+            const filesContainer = document.getElementById('filesContainer');
+
+            // Обработка клика по зоне drop
+            dropZone.addEventListener('click', function() {
+                fileInput.click();
+            });
+
+            // Обработка перетаскивания файлов
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, unhighlight, false);
+            });
+
+            function highlight() {
+                dropZone.classList.add('drag-over');
+            }
+
+            function unhighlight() {
+                dropZone.classList.remove('drag-over');
+            }
+
+            // Обработка drop файлов
+            dropZone.addEventListener('drop', handleDrop, false);
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                fileInput.files = files;
+                uploadForm.submit();
+            }
+
+            // Drag & Drop для перемещения файлов между папками
+            if (filesContainer) {
+                const fileCards = filesContainer.querySelectorAll('.file-card[data-file-id]');
+                const folderCards = filesContainer.querySelectorAll('.folder-card[data-folder-id]');
+
+                fileCards.forEach(card => {
+                    card.addEventListener('dragstart', handleDragStart);
+                    card.addEventListener('dragend', handleDragEnd);
+                });
+
+                folderCards.forEach(card => {
+                    card.addEventListener('dragover', handleDragOver);
+                    card.addEventListener('dragenter', handleDragEnter);
+                    card.addEventListener('dragleave', handleDragLeave);
+                    card.addEventListener('drop', handleDropFile);
+                });
+            }
+
+            function handleDragStart(e) {
+                e.dataTransfer.setData('text/plain', e.target.dataset.fileId);
+                e.target.style.opacity = '0.4';
+            }
+
+            function handleDragEnd(e) {
+                e.target.style.opacity = '1';
+            }
+
+            function handleDragOver(e) {
+                e.preventDefault();
+            }
+
+            function handleDragEnter(e) {
+                e.preventDefault();
+                e.target.classList.add('drag-over');
+            }
+
+            function handleDragLeave(e) {
+                e.target.classList.remove('drag-over');
+            }
+
+            function handleDropFile(e) {
+                e.preventDefault();
+                e.target.classList.remove('drag-over');
+                
+                const fileId = e.dataTransfer.getData('text/plain');
+                const targetFolderId = e.target.dataset.folderId;
+
+                // Отправляем запрос на перемещение файла
+                fetch('/api/move-file', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        file_id: parseInt(fileId),
+                        target_folder_id: targetFolderId ? parseInt(targetFolderId) : null
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        // Обновляем страницу после успешного перемещения
+                        window.location.reload();
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка при перемещении файла:', error);
+                    alert('Ошибка при перемещении файла');
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -8,16 +8,17 @@
 # validator — для создания кастомных валидаторов,
 # Optional и datetime — для работы с опциональными полями и датами.
 # Импортируем enum для создания перечислений (ролей пользователей).
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, BigInteger
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 from pydantic import BaseModel, EmailStr, validator
 from typing import Optional
 from datetime import datetime
 import enum
+from file_models import Base
 
 # Создаём базовый класс для декларативного определения моделей SQLAlchemy.
-Base = declarative_base()
+
 
 # --- Перечисление ролей пользователей ---
 # Создаём класс UserRole, наследуемый от str и enum.Enum,
@@ -42,6 +43,8 @@ class User(Base):
     is_active = Column(Boolean, default=True)  # Флаг активности пользователя (по умолчанию True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата и время создания записи
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Дата и время последнего обновления записи
+    quota = Column(BigInteger, default=1024 * 1024 * 1024)  # 1 ГБ по умолчанию (в байтах)
+    used_space = Column(BigInteger, default=0)  # Текущее использованное пространство
 
 # --- Валидаторы для полей пользователя ---
 # Класс UsernameValidator для валидации имени пользователя.
