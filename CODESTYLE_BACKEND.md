@@ -1,15 +1,15 @@
 # 1. Отступы
-Рекомендуется использовать 4 пробела на каждый уровень отступа. Python 3 запрещает смешивание табуляции и пробелов в отступах. Код, в котором используются и те, и другие типы отступов, должен быть исправлен так, чтобы отступы в нем были расставлены только с помощью пробелов.
+Рекомендуется использовать 1 таб на каждый уровень отступа. Python 3 запрещает смешивание табуляции и пробелов в отступах. Код, в котором используются и те, и другие типы отступов, должен быть исправлен так, чтобы отступы в нем были расставлены только с помощью табов.
 
 <span style="color:green">Хорошо</span>
 ```
-def no_tab_using():
-    no_tab = 'Using 4 spaces'
+def tab_using():
+    one_tab_using = 'Using 1 tab'
 ```
 <span style="color:red">Плохо</span>
 ```
-def use_tab():
-	one_tab_using = 'Ugly'
+def no_tab():
+    4spaces_using = 'Ugly'
 ```
 
 # 2. Точки с запятой
@@ -36,7 +36,7 @@ if budget < 0:
     return False
 # -------------------
 while counter <= 10:
-  counter += 1
+    counter += 1
 # -------------------
 if sea_country and cheap_country:
     add_country_for_visit()
@@ -146,7 +146,7 @@ def complex(real, imag = 0.0): return magic(r = real, i = imag)
 <span style="color:green">Хорошо</span>
 ```
 style_object(self, width, height, color='black', design=None,
-        emphasis=None, highlight=0)
+            emphasis=None, highlight=0)
 
 if (width == 0 and height == 0 and
     color == 'red' and emphasis == 'strong'):
@@ -156,7 +156,7 @@ if (width == 0 and height == 0 and
 <span style="color:green">Хорошо</span>
 ```
 long_string = ('This will build a very long long '
-    'long long long long long long string')
+            'long long long long long long string')
 ```
 Что касается длинных URL в комментариях, то располагайте их, если это необходимо, на одной строке.
 
@@ -193,7 +193,7 @@ def __init__(self):
   self.name = 'My name'
   .
   def f(self):
-      return 'hello world'
+    return 'hello world'
   .
   .
 def MyFunc():

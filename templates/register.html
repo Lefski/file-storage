@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Регистрация - File Storage{% endblock %}
+
+{% block content %}
+<div class="form-group">
+    <h2>📝 Регистрация</h2>
+    <p>Создайте новый аккаунт</p>
+</div>
+
+<form method="POST" action="/register">
+    <div class="form-group">
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" required placeholder="your@email.com">
+    </div>
+    
+    <div class="form-group">
+        <label for="username">Имя пользователя:</label>
+        <input type="text" id="username" name="username" required placeholder="username" minlength="3" maxlength="50">
+        <small>3-50 символов, только буквы, цифры, _ и -</small>
+    </div>
+    
+    <div class="form-group">
+        <label for="password">Пароль:</label>
+        <input type="password" id="password" name="password" required placeholder="Минимум 6 символов" minlength="6">
+    </div>
+    
+    <div class="form-group">
+        <button type="submit" class="btn">Зарегистрироваться</button>
+    </div>
+</form>
+
+<div class="links">
+    <a href="/login">Уже есть аккаунт? Войдите</a> | 
+    <a href="/">На главную</a>
+</div>
+{% endblock %}

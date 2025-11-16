@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Главная - File Storage{% endblock %}
+
+{% block content %}
+<div class="user-info" id="userInfo" style="display: none;">
+    <h3>👤 Информация о пользователе</h3>
+    <div id="userDetails"></div>
+</div>
+
+<div class="form-group">
+    <h2>Добро пожаловать!</h2>
+    <p>Выберите действие:</p>
+</div>
+
+<div class="form-group">
+    <button class="btn" onclick="window.location.href='/login'">🔑 Войти</button>
+</div>
+
+<div class="form-group">
+    <button class="btn" onclick="window.location.href='/register'" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">📝 Зарегистрироваться</button>
+</div>
+
+<div class="links">
+    <a href="/docs">API Документация</a>
+</div>
+
+<script>
+    // Проверить, авторизован ли пользователь
+    const token = localStorage.getItem('token');
+    if (token) {
+        fetch('/me', {
+            headers: {
+                'Authorization': 'Bearer ' + token
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            }
+            throw new Error('Not authorized');
+        })
+        .then(user => {
+            document.getElementById('userInfo').style.display = 'block';
+            document.getElementById('userDetails').innerHTML = `
+                <p><strong>Имя:</strong> ${user.username}</p>
+                <p><strong>Email:</strong> ${user.email}</p>
+                <p><strong>Роль:</strong> ${user.role}</p>
+                <button onclick="logout()" style="background: #dc3545; margin-top: 10px;">Выйти</button>
+            `;
+        })
+        .catch(() => {
+            localStorage.removeItem('token');
+        });
+    }
+
+    function logout() {
+        localStorage.removeItem('token');
+        window.location.href = '/';
+    }
+</script>
+{% endblock %}

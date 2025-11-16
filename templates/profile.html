@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Профиль - File Storage{% endblock %}
+
+{% block content %}
+<div class="form-group">
+    <h2>👤 Ваш профиль</h2>
+    <p>Информация о вашем аккаунте</p>
+</div>
+
+<div class="user-info">
+    <p><strong>ID:</strong> {{ user.id }}</p>
+    <p><strong>Имя пользователя:</strong> {{ user.username }}</p>
+    <p><strong>Email:</strong> {{ user.email }}</p>
+    <p><strong>Роль:</strong> {{ user.role }}</p>
+    <p><strong>Статус:</strong> {{ "Активен" if user.is_active else "Неактивен" }}</p>
+    <p><strong>Дата регистрации:</strong> {{ user.created_at.strftime('%d.%m.%Y %H:%M') }}</p>
+</div>
+
+<div class="form-group">
+    <button class="btn" onclick="window.location.href='/'">На главную</button>
+    <button class="btn" onclick="window.location.href='/logout'" style="background: #dc3545;">Выйти</button>
+</div>
+{% endblock %}
