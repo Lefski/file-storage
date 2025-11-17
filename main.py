@@ -6,6 +6,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import models
 import auth_utils
@@ -15,6 +16,14 @@ from datetime import timedelta
 
 # Создаём экземпляр FastAPI с указанием метаданных (название и версия API).
 app = FastAPI(title="File Storage Auth API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],    # Разрешает все origins
+    allow_credentials=True, # Разрешает отправку cookies
+    allow_methods=["*"],    # Разрешает все методы
+    allow_headers=["*"],    # Разрешает все заголовки
+)
 
 # Настраиваем шаблонизатор Jinja2 для рендеринга HTML-страниц.
 # Указываем директорию, где хранятся шаблоны.
