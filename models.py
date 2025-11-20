@@ -45,12 +45,6 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата и время создания записи
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Дата и время последнего обновления записи
 
-class TokenWithRefresh(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str
-    role: str
-
 # --- Валидаторы для полей пользователя ---
 # Класс UsernameValidator для валидации имени пользователя.
 class UsernameValidator:
