@@ -11,7 +11,7 @@ import models
 import auth_utils
 from database import get_db
 from models import UserCreate, UserLogin, UserResponse, Token, UserRole
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import List, Optional, Callable
 from file_models import Files, FileInfoResponse, FileRename, Folder, FolderCreate, FolderResponse, FileMove
 from chain_of_duties import (AuthCheckHandler, QuotaCheckHandler, FileTypeCheckHandler, FolderCheckHandler, SaveFileHandler,
@@ -21,6 +21,9 @@ from chain_of_duties import (AuthCheckHandler, QuotaCheckHandler, FileTypeCheckH
 import file_utils
 import os
 import shutil
+import zipfile
+import tempfile
+
 
 # Создаём экземпляр FastAPI с указанием метаданных (название и версия API).
 app = FastAPI(title="File Storage Auth API", version="1.0.0")
@@ -276,6 +279,7 @@ async def profile_page(
         query = query.filter(Files.filename.ilike(search_term))
         # Если идет поиск, игнорируем folder_id и показываем все найденные файлы
         files = query.all()
+        
         current_folder = None
         search_mode = True
     else:
@@ -292,6 +296,8 @@ async def profile_page(
     # Рассчитываем статистику использования пространства
     total_files_count = db.query(Files).filter(Files.user_id == user.id).count()
     total_folders_count = len(folders)
+    
+
     
     # Убедимся, что у пользователя есть квота (если нет - установим 1 ГБ)
     if not user.quota:
@@ -396,7 +402,15 @@ async def upload_profile_file(
     folder_id: Optional[int] = Form(None),
     db: Session = Depends(get_db)
 ):
+    def get_redirect_url(folder_id: Optional[int]) -> str:
+        """Вспомогательная функция для формирования URL перенаправления."""
+        return f"/profile?folder_id={folder_id}" if folder_id else "/profile"
+    
     try:
+        # Проверяем корректность folder_id
+        if folder_id is not None and folder_id < 0:
+            raise HTTPException(status_code=400, detail="Некорректный идентификатор папки")# Проверяем корректность folder_id
+        
         # обьявление операций цепи пользователя
         auth_handler = AuthCheckHandler()
         quota_handler = QuotaCheckHandler()
@@ -425,7 +439,8 @@ async def upload_profile_file(
     except Exception as e:
         db.rollback()
         # В случае ошибки возвращаем на страницу профиля
-        redirect_url = f"/profile?folder_id={folder_id}" if folder_id else "/profile"
+        print(f"file uppload error: {str(e)}")
+        redirect_url = get_current_user(folder_id)
         return RedirectResponse(url=redirect_url, status_code=303)
 
 
@@ -486,6 +501,42 @@ async def download_profile_file(
         media_type='application/octet-stream'
     )
 
+
+@app.post("/profile/download-multiple")
+async def download_multiple_files(
+    request: Request,
+    file_ids: List[int] = Form(...),
+    db: Session = Depends(get_db)
+):
+    user = get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Не авторизован")
+
+    # Получаем файлы пользователя
+    files = db.query(Files).filter(
+        Files.id.in_(file_ids),
+        Files.user_id == user.id
+    ).all()
+
+    if not files:
+        raise HTTPException(status_code=404, detail="Файлы не найдены")
+
+    # Создаем временный ZIP архив
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
+        with zipfile.ZipFile(tmp_file.name, 'w') as zipf:
+            for file in files:
+                if os.path.exists(file.file_path):
+                    # Добавляем файл в архив с исходным именем
+                    zipf.write(file.file_path, file.filename)
+
+        # Возвращаем ZIP архив
+        return FileResponse(
+            path=tmp_file.name,
+            filename=f"files_{user.username}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+            media_type='application/zip'
+        )
+    
+    
 # Создание новой папки
 @app.post("/profile/folders/create")
 async def create_folder(
