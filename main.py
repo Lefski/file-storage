@@ -463,16 +463,27 @@ async def rename_profile_file(
     if not new_filename:
         return RedirectResponse(url="/profile", status_code=303)
 
+    if not new_filename.strip():
+        raise HTTPException(status_code=400, detail="Имя файла не может быть пустым")
+
+    if any(char in new_filename for char in ['/', '\\', ':', '*', '?', '"', '<', '>', '|']):
+        raise HTTPException(status_code=400, detail="Имя файла содержит запрещённые символы")
+
     file_dir = os.path.dirname(file.file_path)
     new_file_path = os.path.join(file_dir, new_filename)
 
-    file_utils.rename_file_on_disk(file.file_path, new_file_path)
+    if os.path.exists(new_file_path):
+        raise HTTPException(status_code=400, detail="Файл с таким именем уже существует")
 
-    file.filename = new_filename
-    file.file_path = new_file_path
-    file.updated_at = func.now()
-
-    db.commit()
+    try:
+        file_utils.rename_file_on_disk(file.file_path, new_file_path)
+        file.filename = new_filename
+        file.file_path = new_file_path
+        file.updated_at = func.now()
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Ошибка при переименовании файла: {str(e)}")
 
     return RedirectResponse(url="/profile", status_code=303)
 
