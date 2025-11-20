@@ -1,18 +1,19 @@
 # Импортируем необходимые модули и классы из FastAPI для создания API,
 # работы с зависимостями, обработки ошибок, работы с HTTP-запросами и шаблонами.
 # Также импортируем модули для работы с базой данных, моделями и утилитами аутентификации.
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Form
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Response, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+import json
+from datetime import timedelta, datetime
+from models import UserCreate, UserLogin, UserResponse, Token, UserRole, RefreshToken
 import models
 import auth_utils
 from database import get_db
-from models import UserCreate, UserLogin, UserResponse, Token, UserRole
-from datetime import timedelta
 
 # Создаём экземпляр FastAPI с указанием метаданных (название и версия API).
 app = FastAPI(title="File Storage Auth API", version="1.0.0")
@@ -68,13 +69,13 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 # Обработчик GET-запроса на корневой путь ("/").
 # Возвращает главную страницу (index.html) с использованием шаблона Jinja2.
-@app.get("/", response_class=HTMLResponse, tags=["Страницы"])
+@app.get("/", response_class=HTMLResponse, tags=["Тестирование"])
 async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 # Обработчик GET-запроса на страницу входа ("/login").
 # Возвращает страницу входа (login.html).
-@app.get("/login", response_class=HTMLResponse, tags=["Страницы"])
+@app.get("/login", response_class=HTMLResponse, tags=["Тестирование"])
 async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
@@ -152,7 +153,7 @@ async def login_form(
 
 # Обработчик GET-запроса на страницу регистрации ("/register").
 # Возвращает страницу регистрации (register.html).
-@app.get("/register", response_class=HTMLResponse, tags=["Страницы"])
+@app.get("/register", response_class=HTMLResponse, tags=["Тестирование"])
 async def register_page(request: Request):
     return templates.TemplateResponse("register.html", {"request": request})
 
@@ -247,7 +248,7 @@ async def register_form(
 
 # Обработчик GET-запроса на страницу профиля ("/profile").
 # Проверяет токен доступа и возвращает страницу профиля с данными пользователя.
-@app.get("/profile", response_class=HTMLResponse, tags=["Страницы"])
+@app.get("/profile", response_class=HTMLResponse, tags=["Тестирование"])
 async def profile_page(request: Request, db: Session = Depends(get_db)):
     # Получаем токен доступа из cookies.
     token = request.cookies.get("access_token")
@@ -300,13 +301,38 @@ async def logout():
     response = RedirectResponse(url="/")
     response.delete_cookie("access_token")
     return response
-
+    
+    
 # --- API эндпоинты ---
 
 # Обработчик POST-запроса на регистрацию пользователя через API ("/api/register").
-# Принимает данные пользователя, проверяет их, создаёт нового пользователя и возвращает его данные.
-@app.post("/api/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@app.post("/api/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED, tags=["Всё для Фронта"])
 async def api_register(user_data: UserCreate, db: Session = Depends(get_db)):
+    """
+    Регистрация нового пользователя в системе.
+    
+    Создает учетную запись пользователя с указанными данными.
+    Проверяет уникальность email и username перед созданием.
+    
+    **Требования:**
+    - Email должен быть уникальным и валидным
+    - Username должен быть уникальным, от 3 до 50 символов
+    - Пароль должен содержать минимум 6 символов
+    - Username может содержать только буквы, цифры, underscores и дефисы
+    
+    **Возвращает:**
+    - **id**: Уникальный идентификатор пользователя
+    - **email**: Email пользователя
+    - **username**: Имя пользователя
+    - **role**: Роль пользователя (по умолчанию "user")
+    - **is_active**: Статус активности (по умолчанию True)
+    - **created_at**: Дата и время создания учетной записи
+    
+    **Ошибки:**
+    - 400: Пользователь с таким email уже существует
+    - 400: Пользователь с таким username уже существует
+    - 422: Невалидные данные (некорректный email, короткий username или пароль)
+    """
     # Проверяем, существует ли пользователь с таким email.
     existing_user = db.query(models.User).filter(
         models.User.email == user_data.email
@@ -350,9 +376,36 @@ async def api_register(user_data: UserCreate, db: Session = Depends(get_db)):
     return db_user
 
 # Обработчик POST-запроса на вход пользователя через API ("/api/login").
-# Принимает данные пользователя, проверяет их и возвращает токен доступа.
-@app.post("/api/login", response_model=Token)
+@app.post("/api/login", response_model=Token, tags=["Всё для Фронта"])
 async def api_login(user_data: UserLogin, db: Session = Depends(get_db)):
+    """
+    Аутентификация пользователя и выдача токенов доступа.
+    
+    Проверяет учетные данные пользователя и выдает пару токенов:
+    - Access token для доступа к защищенным ресурсам
+    - Refresh token для обновления access token
+    
+    **Требования:**
+    - Email должен существовать в системе
+    - Пароль должен быть корректным
+    - Учетная запись должна быть активной
+    
+    **Возвращает:**
+    - **access_token**: JWT access token (срок жизни 30 минут)
+    - **refresh_token**: JWT refresh token (срок жизни 30 дней)
+    - **token_type**: Тип токена (bearer)
+    - **role**: Роль пользователя для авторизации
+    
+    **Ошибки:**
+    - 401: Неверный email или пароль
+    - 401: Пользователь деактивирован
+    - 422: Невалидные данные (некорректный email или пароль)
+    
+    **Примечание:**
+    - Refresh token сохраняется в памяти сервера
+    - При перезагрузке сервера все refresh токены сбрасываются
+    - Access token должен передаваться в заголовке Authorization: Bearer <token>
+    """
     # Ищем пользователя в базе данных по email.
     user = db.query(models.User).filter(models.User.email == user_data.email).first()
 
@@ -377,23 +430,35 @@ async def api_login(user_data: UserLogin, db: Session = Depends(get_db)):
             detail="Пользователь деактивирован"
         )
 
-    # Создаём токен доступа.
+    # Создаем оба токена
     access_token_expires = timedelta(minutes=auth_utils.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth_utils.create_access_token(
         data={"sub": user.email, "role": user.role},
         expires_delta=access_token_expires
     )
-
-    # Возвращаем токен доступа.
+    
+    refresh_token_expires = timedelta(days=auth_utils.REFRESH_TOKEN_EXPIRE_DAYS)
+    refresh_token = auth_utils.create_refresh_token(
+        data={"sub": user.email}
+    )
+    
+    # Сохраняем refresh токен в памяти (НЕ в БД)
+    auth_utils.store_refresh_token(
+        token=refresh_token,
+        user_email=user.email,
+        expires_at=datetime.utcnow() + refresh_token_expires
+    )
+    
     return {
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "role": user.role
     }
 
 # Обработчик GET-запроса для получения данных текущего пользователя через API ("/api/me").
 # Проверяет токен доступа и возвращает данные пользователя.
-@app.get("/api/me", response_model=UserResponse)
+@app.get("/api/me", response_model=UserResponse, tags=["Всё для Фронта"])
 async def api_get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),  # Получаем данные авторизации
     db: Session = Depends(get_db)  # Получаем сессию базы данных
@@ -433,7 +498,7 @@ async def api_get_current_user(
 
 # Обработчик GET-запроса для доступа к админ-панели ("/api/admin").
 # Проверяет токен доступа и роль пользователя.
-@app.get("/api/admin")
+@app.get("/api/admin", tags=["Всё для Фронта"])
 async def admin_only(
     credentials: HTTPAuthorizationCredentials = Depends(security),  # Получаем данные авторизации
     db: Session = Depends(get_db)  # Получаем сессию базы данных
@@ -455,6 +520,149 @@ async def admin_only(
 
     # Возвращаем сообщение о доступе к админ-панели.
     return {"message": "Добро пожаловать в админ-панель!"}
+
+# Обновление access токена по refresh токену
+@app.post("/api/refresh", tags=["Всё для Фронта"])
+async def refresh_token(
+    refresh_token_request: RefreshToken,
+    db: Session = Depends(get_db)
+):
+    """
+    Обновление access токена с помощью refresh токена.
+    
+    Используется когда access token истек, но refresh token еще действителен.
+    Возвращает новый access token для продолжения работы с API.
+    
+    **Требования:**
+    - Refresh token должен быть валидным JWT
+    - Refresh token должен существовать в памяти сервера
+    - Refresh token не должен быть отозван
+    - Refresh token не должен быть просрочен
+    - Пользователь должен существовать и быть активным
+    
+    **Возвращает:**
+    - **access_token**: Новый JWT access token
+    - **token_type**: Тип токена (bearer)
+    
+    **Ошибки:**
+    - 401: Невалидный, отозванный, просроченный или не найденный refresh token
+    - 401: Пользователь не найден или неактивен
+    """
+    # Извлекаем строку токена из объекта модели
+    refresh_token_str = refresh_token_request.refresh_token
+    
+    # Проверяем JWT подпись
+    payload = auth_utils.verify_token(refresh_token_str)
+    if not payload or payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    
+    # Проверяем наличие в памяти
+    stored_token = auth_utils.get_refresh_token(refresh_token_str)
+    if not stored_token:
+        raise HTTPException(status_code=401, detail="Refresh token not found")
+    
+    # Проверяем не отозван ли
+    if stored_token['revoked']:
+        raise HTTPException(status_code=401, detail="Refresh token revoked")
+    
+    # Проверяем не истек ли
+    if stored_token['expires_at'] < datetime.utcnow():
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+    
+    # Получаем пользователя
+    user = db.query(models.User).filter(models.User.email == stored_token['user_email']).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or inactive")
+    
+    # Создаем новый access токен
+    access_token_expires = timedelta(minutes=auth_utils.ACCESS_TOKEN_EXPIRE_MINUTES)
+    new_access_token = auth_utils.create_access_token(
+        data={"sub": user.email, "role": user.role},
+        expires_delta=access_token_expires
+    )
+    
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer"
+    }
+
+@app.post("/api/logout", tags=["Всё для Фронта"])
+async def api_logout(
+    refresh_token_request: RefreshToken,
+    response: Response = None
+):
+    """
+    Выход из учетной записи. Отзыв refresh токена на сервере.
+    
+    Используется для безопасного завершения сессии пользователя.
+    Отзывает переданный refresh token на сервере и очищает cookies в браузере.
+    
+    **Что происходит:**
+    - Refresh token отзывается на сервере
+    - Удаляются cookies с access_token и refresh_token
+    - Сессия полностью завершается на клиенте и сервере
+    
+    **Требования:**
+    - Refresh token должен быть передан в теле запроса
+    - Refresh token должен быть валидным JWT
+    - Refresh token должен существовать в памяти сервера
+    - Refresh token не должен быть уже отозван
+    
+    **Возвращает:**
+    - **message**: Статус операции
+    - **detail**: Детальное описание результата
+    
+    **Ошибки:**
+    - 400: Refresh token не передан
+    - 400: Невалидный refresh token
+    - 400: Refresh token не найден или уже отозван
+    - 400: Refresh token уже отозван ранее
+    """
+    # Извлекаем строку токена из объекта модели
+    refresh_token_str = refresh_token_request.refresh_token
+    
+    # Проверяем, что токен передан
+    if not refresh_token_str:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Refresh token обязателен"
+        )
+    
+    # Проверяем валидность JWT токена
+    payload = auth_utils.verify_token(refresh_token_str)
+    if not payload or payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Невалидный refresh token"
+        )
+    
+    # Проверяем, существует ли токен в хранилище
+    stored_token = auth_utils.get_refresh_token(refresh_token_str)
+    if not stored_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Refresh token не найден или уже отозван"
+        )
+    
+    # Проверяем, не отозван ли токен уже
+    if stored_token['revoked']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Refresh token уже отозван"
+        )
+    
+    # Отзываем токен на сервере
+    auth_utils.revoke_refresh_token(refresh_token_str)
+    
+    # Очищаем cookies в браузере
+    if response:
+        response.delete_cookie("access_token")
+        response.delete_cookie("refresh_token")
+    
+    return {
+        "message": "Успешный выход из системы",
+        "detail": "Refresh token отозван и cookies очищены"
+    }
 
 # Точка входа для запуска приложения.
 if __name__ == "__main__":

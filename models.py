@@ -11,6 +11,8 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import relationship
 from pydantic import BaseModel, EmailStr, validator
 from typing import Optional
 from datetime import datetime
@@ -42,6 +44,12 @@ class User(Base):
     is_active = Column(Boolean, default=True)  # Флаг активности пользователя (по умолчанию True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата и время создания записи
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Дата и время последнего обновления записи
+
+class TokenWithRefresh(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str
+    role: str
 
 # --- Валидаторы для полей пользователя ---
 # Класс UsernameValidator для валидации имени пользователя.
@@ -113,6 +121,7 @@ class UserResponse(BaseModel):
 # Схема Token для возврата токена доступа.
 class Token(BaseModel):
     access_token: str  # Токен доступа
+    refresh_token: str # Токен для обновления
     token_type: str  # Тип токена (например, "bearer")
     role: str  # Роль пользователя
 
@@ -120,3 +129,6 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None  # Email пользователя (опционально)
     role: Optional[str] = None  # Роль пользователя (опционально)
+
+class RefreshToken(BaseModel):
+    refresh_token: str
