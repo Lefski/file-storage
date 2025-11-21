@@ -13,8 +13,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import relationship
-from pydantic import BaseModel, EmailStr, validator
-from typing import Optional
+from pydantic import BaseModel, EmailStr, validator, Field
+from typing import Optional, List
 from datetime import datetime
 import enum
 
@@ -44,6 +44,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)  # Флаг активности пользователя (по умолчанию True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата и время создания записи
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Дата и время последнего обновления записи
+    quota = Column(Integer, default=1073741824)
 
 # --- Валидаторы для полей пользователя ---
 # Класс UsernameValidator для валидации имени пользователя.
@@ -107,6 +108,8 @@ class UserResponse(BaseModel):
     role: str  # Роль пользователя
     is_active: bool  # Флаг активности пользователя
     created_at: datetime  # Дата и время создания записи
+    quota: int  # Квота
+    used_storage: int = 0  # Вычисление используемого места
 
     # Настройка для совместимости с ORM-моделями (например, SQLAlchemy).
     class Config:
@@ -126,3 +129,20 @@ class TokenData(BaseModel):
 
 class RefreshToken(BaseModel):
     refresh_token: str
+
+class FileInfo(BaseModel):
+    filename: str
+    original_name: str
+    file_path: str
+    size: int
+    user_id: int
+
+class FileRenameRequest(BaseModel):
+    old_filename: str
+    new_filename: str
+
+class FileListResponse(BaseModel):
+    files: List[dict]
+
+class UserQuotaUpdate(BaseModel):
+    quota: int = Field(..., gt=0, description="Квота хранилища в байтах")

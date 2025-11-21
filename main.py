@@ -1,7 +1,7 @@
 # Импортируем необходимые модули и классы из FastAPI для создания API,
 # работы с зависимостями, обработки ошибок, работы с HTTP-запросами и шаблонами.
 # Также импортируем модули для работы с базой данных, моделями и утилитами аутентификации.
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Response, Form
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Response, Form, File, UploadFile
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -10,10 +10,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import json
 from datetime import timedelta, datetime
-from models import UserCreate, UserLogin, UserResponse, Token, UserRole, RefreshToken
+from models import UserCreate, UserLogin, UserResponse, Token, UserRole, RefreshToken, FileInfo, FileRenameRequest, FileListResponse, UserQuotaUpdate
 import models
 import auth_utils
 from database import get_db
+from file_storage import file_storage
 
 # Создаём экземпляр FastAPI с указанием метаданных (название и версия API).
 app = FastAPI(title="File Storage Auth API", version="1.0.0")
@@ -662,6 +663,235 @@ async def api_logout(
     return {
         "message": "Успешный выход из системы",
         "detail": "Refresh token отозван и cookies очищены"
+    }
+
+@app.post("/api/files/upload", tags=["Файловое хранилище"])
+async def upload_file(
+    file: UploadFile = File(...),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """
+    Загрузка файла в хранилище пользователя с проверкой квоты.
+    
+    Требует авторизации через Bearer token.
+    Файл сохраняется с уникальным именем для безопасности.
+    Проверяет не превышена ли квота хранилища.
+    
+    **Возвращает:**
+    - Информация о загруженном файле
+    
+    **Ошибки:**
+    - 401: Невалидный токен
+    - 400: Превышена квота хранилища
+    - 500: Ошибка загрузки файла
+    """
+    # Проверяем токен и получаем пользователя
+    token = credentials.credentials
+    payload = auth_utils.verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Невалидный токен")
+    
+    email = payload.get("sub")
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    
+    # Используем фасад для загрузки файла (передаем db для проверки квоты)
+    file_info = await file_storage.upload_file(file, user.id, db)
+    return file_info
+
+@app.delete("/api/files/{filename}", tags=["Файловое хранилище"])
+async def delete_file(
+    filename: str,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """
+    Удаление файла из хранилища пользователя.
+    
+    Требует авторизации через Bearer token.
+    Удаляет файл по имени.
+    
+    **Ошибки:**
+    - 401: Невалидный токен
+    - 404: Файл не найден
+    - 500: Ошибка удаления файла
+    """
+    # Проверяем токен и получаем пользователя
+    token = credentials.credentials
+    payload = auth_utils.verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Невалидный токен")
+    
+    email = payload.get("sub")
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    
+    # Используем фасад для удаления файла
+    result = await file_storage.delete_file(filename, user.id)
+    return {"message": "Файл успешно удален", "filename": filename}
+
+@app.put("/api/files/rename", tags=["Файловое хранилище"])
+async def rename_file(
+    rename_request: FileRenameRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """
+    Переименование файла в хранилище пользователя.
+    
+    Требует авторизации через Bearer token.
+    Изменяет имя файла на новое.
+    
+    **Ошибки:**
+    - 401: Невалидный токен
+    - 404: Файл не найден
+    - 400: Файл с таким именем уже существует
+    - 500: Ошибка переименования файла
+    """
+    # Проверяем токен и получаем пользователя
+    token = credentials.credentials
+    payload = auth_utils.verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Невалидный токен")
+    
+    email = payload.get("sub")
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    
+    # Используем фасад для переименования файла
+    result = await file_storage.rename_file(
+        rename_request.old_filename,
+        rename_request.new_filename,
+        user.id
+    )
+    return result
+
+@app.get("/api/files", tags=["Файловое хранилище"])
+async def get_files(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """
+    Получение списка файлов пользователя.
+    
+    Требует авторизации через Bearer token.
+    Возвращает список всех файлов пользователя.
+    
+    **Возвращает:**
+    - Список файлов с информацией о каждом
+    
+    **Ошибки:**
+    - 401: Невалидный токен
+    - 500: Ошибка получения списка файлов
+    """
+    # Проверяем токен и получаем пользователя
+    token = credentials.credentials
+    payload = auth_utils.verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Невалидный токен")
+    
+    email = payload.get("sub")
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    
+    # Используем фасад для получения списка файлов
+    files = await file_storage.get_user_files(user.id)
+    return {"files": files}
+
+@app.get("/api/storage/info", tags=["Файловое хранилище"])
+async def get_storage_info(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """
+    Получение информации о хранилище пользователя.
+    
+    Требует авторизации через Bearer token.
+    Возвращает информацию о квоте и использованном месте.
+    
+    **Возвращает:**
+    - **quota**: Общая квота в байтах
+    - **used**: Использовано байт
+    - **available**: Доступно байт
+    - **usage_percentage**: Процент использования
+    - **formatted**: Отформатированные значения для отображения
+    """
+    # Проверяем токен и получаем пользователя
+    token = credentials.credentials
+    payload = auth_utils.verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Невалидный токен")
+    
+    email = payload.get("sub")
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    
+    storage_info = await file_storage.get_user_storage_info(user.id, db)
+    return storage_info
+
+@app.put("/api/admin/users/{user_id}/quota", tags=["Администрирование"])
+async def update_user_quota(
+    user_id: int,
+    quota_update: UserQuotaUpdate,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """
+    Изменение квоты хранилища пользователя (только для администраторов).
+    
+    Требует авторизации через Bearer token с ролью admin.
+    Позволяет изменить лимит хранилища для пользователя.
+    
+    **Параметры:**
+    - **user_id**: ID пользователя
+    - **quota**: Новая квота в байтах
+    
+    **Возвращает:**
+    - Обновленная информация о пользователе
+    
+    **Ошибки:**
+    - 401: Невалидный токен
+    - 403: Недостаточно прав
+    - 404: Пользователь не найден
+    """
+    # Проверяем права администратора
+    token = credentials.credentials
+    payload = auth_utils.verify_token(token)
+    if not payload or payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+    
+    # Находим пользователя
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    
+    # Проверяем, что новая квота не меньше текущего использования
+    current_usage = await file_storage.get_user_storage_usage(user_id)
+    if quota_update.quota < current_usage:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Новая квота не может быть меньше текущего использования ({file_storage.format_bytes(current_usage)})"
+        )
+    
+    # Обновляем квоту
+    user.quota = quota_update.quota
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "message": "Квота обновлена",
+        "user_id": user.id,
+        "username": user.username,
+        "new_quota": quota_update.quota,
+        "new_quota_formatted": file_storage.format_bytes(quota_update.quota),
+        "current_usage": current_usage,
+        "current_usage_formatted": file_storage.format_bytes(current_usage)
     }
 
 # Точка входа для запуска приложения.
