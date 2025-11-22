@@ -146,3 +146,42 @@ class FileListResponse(BaseModel):
 
 class UserQuotaUpdate(BaseModel):
     quota: int = Field(..., gt=0, description="Квота хранилища в байтах")
+
+class UserListResponse(BaseModel):
+    users: List[UserResponse]
+    
+class UserFilesResponse(BaseModel):
+    user_id: int
+    username: str
+    email: str
+    files: List[dict]
+    storage_info: dict
+
+class AdminUserListResponse(BaseModel):
+    users: List[dict]
+    total_count: int
+
+class FolderCreate(BaseModel):
+    folder_name: str = Field(..., min_length=1, max_length=255, description="Название папки")
+    parent_path: str = Field("", description="Родительская папка")
+
+class FolderItem(BaseModel):
+    type: str  # "file" или "folder"
+    name: str
+    path: str
+    size: Optional[int] = None
+    created_at: float
+    items_count: Optional[int] = None  # только для папок
+
+class FolderContentResponse(BaseModel):
+    current_path: str
+    items: List[FolderItem]
+    storage_info: dict
+
+class FolderUploadRequest(BaseModel):
+    folder_path: str = Field("", description="Путь для загрузки папки")
+
+class FileMoveRequest(BaseModel):
+    source_path: str = Field(..., description="Текущий путь к файлу")
+    target_folder: str = Field(..., description="Целевая папка")
+    new_filename: Optional[str] = Field(None, description="Новое имя файла (опционально)")
