@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../../api/api'; // импортируем твой axios-инстанс
+import api from '../../api/api';
 import './Login.css';
 import InputField from '../../components/ui_components/search-bar/InputFiled';
 import Logo from '../../components/ui_components/logo/Logo';
@@ -25,12 +25,12 @@ export default function Login({ onLogin }) {
                 email,
                 password
             });
+            console.log(res);
 
-            // JWT токен из ответа — подстрой под свой бекенд!
-            if (res.data.token) {
-                localStorage.setItem("token", res.data.token);
+            if (res.data.access_token) {
+                console.log(res.data.access_token);
+                localStorage.setItem("access_token", res.data.access_token);
             }
-
             onLogin();      
             navigate("/main");
 
