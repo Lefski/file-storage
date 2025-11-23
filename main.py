@@ -14,8 +14,12 @@ from datetime import timedelta, datetime
 from models import UserCreate, UserLogin, UserResponse, Token, UserRole, RefreshToken, FileInfo, FileRenameRequest, FileListResponse, UserQuotaUpdate, UserListResponse, UserFilesResponse, AdminUserListResponse
 import models
 import auth_utils
+from dependencies.services import get_file_service, get_quota_service
 from database import get_db
 from file_storage import file_storage
+from services.file_service import FileService
+from services.quota_service import QuotaService
+from dependencies.services import get_file_service, get_quota_service
 
 # Создаём экземпляр FastAPI с указанием метаданных (название и версия API).
 app = FastAPI(title="File Storage Auth API", version="1.0.0")
@@ -34,6 +38,42 @@ templates = Jinja2Templates(directory="templates")
 
 # Создаём объект для работы с HTTP Bearer авторизацией.
 security = HTTPBearer()
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+) -> models.User:
+    """Зависимость для получения текущего пользователя"""
+    token = credentials.credentials
+    payload = auth_utils.verify_token(token)
+    
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Невалидный токен"
+        )
+    
+    email = payload.get("sub")
+    user = db.query(models.User).filter(models.User.email == email).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Пользователь не найден"
+        )
+    
+    return user
+
+async def get_current_admin(
+    user: models.User = Depends(get_current_user)
+) -> models.User:
+    """Зависимость для проверки прав администратора"""
+    if user.role != "admin":  # Предполагаем, что в модели User есть поле role
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав"
+        )
+    return user
 
 # Обработчики исключений
 @app.exception_handler(RequestValidationError)
@@ -701,163 +741,43 @@ async def delete_file(
 @app.put("/api/files/rename", tags=["Файловое хранилище"])
 async def rename_file(
     rename_request: FileRenameRequest,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    user: models.User = Depends(get_current_user),
+    file_service: FileService = Depends(get_file_service)
 ):
-    """
-    Переименование файла в хранилище пользователя.
-    
-    Требует авторизации через Bearer token.
-    Изменяет имя файла на новое.
-    
-    **Ошибки:**
-    - 401: Невалидный токен
-    - 404: Файл не найден
-    - 400: Файл с таким именем уже существует
-    - 500: Ошибка переименования файла
-    """
-    # Проверяем токен и получаем пользователя
-    token = credentials.credentials
-    payload = auth_utils.verify_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Невалидный токен")
-    
-    email = payload.get("sub")
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-    
-    # Используем фасад для переименования файла
-    result = await file_storage.rename_file(
+    """Переименование файла пользователя"""
+    return await file_service.rename_file(
         rename_request.old_filename,
         rename_request.new_filename,
         user.id
     )
-    return result
 
 @app.get("/api/files", tags=["Файловое хранилище"])
 async def get_files(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    user: models.User = Depends(get_current_user),
+    file_service: FileService = Depends(get_file_service)
 ):
-    """
-    Получение списка файлов пользователя.
-    
-    Требует авторизации через Bearer token.
-    Возвращает список всех файлов пользователя.
-    
-    **Возвращает:**
-    - Список файлов с информацией о каждом
-    
-    **Ошибки:**
-    - 401: Невалидный токен
-    - 500: Ошибка получения списка файлов
-    """
-    # Проверяем токен и получаем пользователя
-    token = credentials.credentials
-    payload = auth_utils.verify_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Невалидный токен")
-    
-    email = payload.get("sub")
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-    
-    # Используем фасад для получения списка файлов
-    files = await file_storage.get_user_files(user.id)
+    """Получение списка файлов пользователя"""
+    files = await file_service.get_user_files(user.id)
     return {"files": files}
 
 @app.get("/api/storage/info", tags=["Файловое хранилище"])
 async def get_storage_info(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    file_service: FileService = Depends(get_file_service)
 ):
-    """
-    Получение информации о хранилище пользователя.
-    
-    Требует авторизации через Bearer token.
-    Возвращает информацию о квоте и использованном месте.
-    
-    **Возвращает:**
-    - **quota**: Общая квота в байтах
-    - **used**: Использовано байт
-    - **available**: Доступно байт
-    - **usage_percentage**: Процент использования
-    - **formatted**: Отформатированные значения для отображения
-    """
-    # Проверяем токен и получаем пользователя
-    token = credentials.credentials
-    payload = auth_utils.verify_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Невалидный токен")
-    
-    email = payload.get("sub")
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-    
-    storage_info = await file_storage.get_user_storage_info(user.id, db)
-    return storage_info
+    """Получение информации о хранилище пользователя"""
+    return await file_service.get_user_storage_info(user.id, db)
 
 @app.put("/api/admin/users/{user_id}/quota", tags=["Администрирование"])
 async def update_user_quota(
     user_id: int,
     quota_update: UserQuotaUpdate,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    admin: models.User = Depends(get_current_admin),
+    quota_service: QuotaService = Depends(get_quota_service)
 ):
-    """
-    Изменение квоты хранилища пользователя (только для администраторов).
-    
-    Требует авторизации через Bearer token с ролью admin.
-    Позволяет изменить лимит хранилища для пользователя.
-    
-    **Параметры:**
-    - **user_id**: ID пользователя
-    - **quota**: Новая квота в байтах
-    
-    **Возвращает:**
-    - Обновленная информация о пользователе
-    
-    **Ошибки:**
-    - 401: Невалидный токен
-    - 403: Недостаточно прав
-    - 404: Пользователь не найден
-    """
-    # Проверяем права администратора
-    token = credentials.credentials
-    payload = auth_utils.verify_token(token)
-    if not payload or payload.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
-    
-    # Находим пользователя
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-    
-    # Проверяем, что новая квота не меньше текущего использования
-    current_usage = await file_storage.get_user_storage_usage(user_id)
-    if quota_update.quota < current_usage:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Новая квота не может быть меньше текущего использования ({file_storage.format_bytes(current_usage)})"
-        )
-    
-    # Обновляем квоту
-    user.quota = quota_update.quota
-    db.commit()
-    db.refresh(user)
-    
-    return {
-        "message": "Квота обновлена",
-        "user_id": user.id,
-        "username": user.username,
-        "new_quota": quota_update.quota,
-        "new_quota_formatted": file_storage.format_bytes(quota_update.quota),
-        "current_usage": current_usage,
-        "current_usage_formatted": file_storage.format_bytes(current_usage)
-    }
+    """Обновление квоты пользователя (только для администраторов)"""
+    return await quota_service.update_user_quota(user_id, quota_update.quota)
 
 @app.get("/api/admin/users", response_model=AdminUserListResponse, tags=["Администрирование"])
 async def get_all_users(
@@ -954,7 +874,7 @@ async def get_all_users(
 @app.get("/api/admin/users/{user_id}/storage-details", tags=["Администрирование"])
 async def get_user_storage_details(
     user_id: int,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    admin: models.User = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
     """
@@ -974,32 +894,22 @@ async def get_user_storage_details(
     - 403: Недостаточно прав
     - 404: Пользователь не найден
     """
-    # Проверяем права администратора
-    token = credentials.credentials
-    payload = auth_utils.verify_token(token)
-    if not payload or payload.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Недостаточно прав")
-    
-    # Находим пользователя
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-    
     # Получаем полную информацию
-    files = await file_storage.get_user_files(user_id)
-    storage_info = await file_storage.get_user_storage_info(user_id, db)
-    
-    return {
-        "user_info": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "role": user.role,
-            "is_active": user.is_active
-        },
-        "storage_info": storage_info,
-        "files": files
-    }
+    try:
+        # Получаем содержимое корневой папки пользователя
+        folder_content = await file_storage.get_folder_content(user_id, "")
+        storage_info = await file_storage.get_user_storage_info(user_id, db)
+        
+        return {
+            "user_id": user_id,
+            "storage_info": storage_info,
+            "files": folder_content.get("items", [])
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка получения информации о хранилище: {str(e)}"
+        )
 
 # Добавьте эти эндпоинты в main.py
 
