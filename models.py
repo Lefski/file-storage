@@ -11,8 +11,10 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
-from pydantic import BaseModel, EmailStr, validator
-from typing import Optional
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import relationship
+from pydantic import BaseModel, EmailStr, validator, Field
+from typing import Optional, List
 from datetime import datetime
 import enum
 
@@ -42,6 +44,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)  # Флаг активности пользователя (по умолчанию True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())  # Дата и время создания записи
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())  # Дата и время последнего обновления записи
+    quota = Column(Integer, default=1073741824)
 
 # --- Валидаторы для полей пользователя ---
 # Класс UsernameValidator для валидации имени пользователя.
@@ -105,6 +108,8 @@ class UserResponse(BaseModel):
     role: str  # Роль пользователя
     is_active: bool  # Флаг активности пользователя
     created_at: datetime  # Дата и время создания записи
+    quota: int  # Квота
+    used_storage: int = 0  # Вычисление используемого места
 
     # Настройка для совместимости с ORM-моделями (например, SQLAlchemy).
     class Config:
@@ -113,6 +118,7 @@ class UserResponse(BaseModel):
 # Схема Token для возврата токена доступа.
 class Token(BaseModel):
     access_token: str  # Токен доступа
+    refresh_token: str # Токен для обновления
     token_type: str  # Тип токена (например, "bearer")
     role: str  # Роль пользователя
 
@@ -120,3 +126,62 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None  # Email пользователя (опционально)
     role: Optional[str] = None  # Роль пользователя (опционально)
+
+class RefreshToken(BaseModel):
+    refresh_token: str
+
+class FileInfo(BaseModel):
+    filename: str
+    original_name: str
+    file_path: str
+    size: int
+    user_id: int
+
+class FileRenameRequest(BaseModel):
+    old_filename: str
+    new_filename: str
+
+class FileListResponse(BaseModel):
+    files: List[dict]
+
+class UserQuotaUpdate(BaseModel):
+    quota: int = Field(..., gt=0, description="Квота хранилища в байтах")
+
+class UserListResponse(BaseModel):
+    users: List[UserResponse]
+    
+class UserFilesResponse(BaseModel):
+    user_id: int
+    username: str
+    email: str
+    files: List[dict]
+    storage_info: dict
+
+class AdminUserListResponse(BaseModel):
+    users: List[dict]
+    total_count: int
+
+class FolderCreate(BaseModel):
+    folder_name: str = Field(..., min_length=1, max_length=255, description="Название папки")
+    parent_path: str = Field("", description="Родительская папка")
+
+class FolderItem(BaseModel):
+    type: str  # "file" или "folder"
+    name: str
+    path: str
+    size: Optional[int] = None
+    created_at: float
+    items_count: Optional[int] = None  # только для папок
+
+class FolderContentResponse(BaseModel):
+    current_path: str
+    items: List[FolderItem]
+    storage_info: dict
+
+class FolderUploadRequest(BaseModel):
+    folder_path: str = Field("", description="Путь для загрузки папки")
+
+class FileMoveRequest(BaseModel):
+    source_path: str = Field(..., description="Текущий путь к файлу")
+    target_folder: str = Field(..., description="Целевая папка")
+    new_filename: Optional[str] = Field(None, description="Новое имя файла (опционально)")

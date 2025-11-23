@@ -452,3 +452,476 @@ from . import sibling
 from .sibling import example
 ```
 Следует избегать шаблонов импортов (from import *), так как они делают неясным то, какие имена присутствуют в глобальном пространстве имён, что вводит в заблуждение как читателей, так и многие автоматизированные средства.
+
+# 11. Информативные имена переменных, функций и классов
+
+## 11.1 Общие принципы именования
+
+Имена должны четко отражать назначение и содержание переменной/функции/класса.
+
+<span style="color:green">Хорошо</span>
+```
+# Переменные
+user_age = 25
+is_logged_in = True
+MAX_CONNECTIONS = 10
+
+# Функции
+def calculate_total_price(items):
+    pass
+
+def validate_user_credentials(username, password):
+    pass
+
+# Классы
+class UserAccountManager:
+    pass
+
+class DatabaseConnectionPool:
+    pass
+```
+
+<span style="color:red">Плохо</span>
+```
+# Неясные имена
+a = 25
+flag = True
+x = 10
+
+# Неинформативные функции
+def calc(x):
+    pass
+
+def check(a, b):
+    pass
+
+# Расплывчатые классы
+class Manager:
+    pass
+
+class Processor:
+    pass
+```
+
+## 11.2 Контекстно-зависимые имена
+
+Имена должны соответствовать предметной области.
+
+<span style="color:green">Хорошо</span>
+```
+class ShoppingCart:
+    def add_product(self, product: Product, quantity: int) -> None:
+        pass
+    
+    def calculate_subtotal(self) -> float:
+        pass
+
+class HTTPRequestHandler:
+    def send_get_request(self, url: str, headers: dict) -> Response:
+        pass
+```
+
+# 12. Модульный подход к разработке
+
+## 12.1 Разделение ответственности
+
+Каждый модуль должен решать одну конкретную задачу.
+
+## 12.2 Структура модуля
+
+Каждый модуль должен иметь четкий интерфейс.
+
+<span style="color:green">Хорошо</span>
+
+```
+# services/payment_service.py
+"""
+Модуль для обработки платежей
+"""
+
+class PaymentProcessor:
+    """Обработчик платежных операций"""
+    
+    def process_credit_card_payment(self, card_data: dict, amount: float) -> bool:
+        """Обработать платеж по кредитной карте"""
+        pass
+    
+    def refund_payment(self, transaction_id: str) -> bool:
+        """Вернуть средства"""
+        pass
+
+# Основной интерфейс модуля
+def create_payment_processor(api_key: str) -> PaymentProcessor:
+    """Фабрика для создания обработчика платежей"""
+    return PaymentProcessor(api_key)
+```
+
+# 13. SOLID-принципы
+
+13.1 Single Responsibility Principle (SRP)
+
+Класс должен иметь только одну причину для изменения.
+
+<span style="color:green">Хорошо</span>
+
+```
+class UserAuthenticator:
+    """Отвечает только за аутентификацию"""
+    
+    def authenticate(self, username: str, password: str) -> bool:
+        pass
+    
+    def generate_token(self, user_id: int) -> str:
+        pass
+
+class UserDataManager:
+    """Отвечает только за управление данными пользователя"""
+    
+    def save_user(self, user: User) -> None:
+        pass
+    
+    def get_user_by_id(self, user_id: int) -> User:
+        pass
+```
+
+<span style="color:red">Плохо</span>
+
+```
+class UserManager:
+    """Нарушает SRP - делает слишком много"""
+    
+    def authenticate(self, username: str, password: str) -> bool:
+        pass
+    
+    def save_user(self, user: User) -> None:
+        pass
+    
+    def send_email(self, user: User, message: str) -> None:
+        pass
+    
+    def generate_report(self) -> Report:
+        pass
+```
+
+## 13.2 Open/Closed Principle (OCP)
+
+Классы должны быть открыты для расширения, но закрыты для модификации.
+
+<span style="color:green">Хорошо</span>
+
+```
+from abc import ABC, abstractmethod
+
+class NotificationService(ABC):
+    """Абстрактный базовый класс для служб уведомлений"""
+    
+    @abstractmethod
+    def send(self, message: str, recipient: str) -> bool:
+        pass
+
+class EmailNotificationService(NotificationService):
+    def send(self, message: str, recipient: str) -> bool:
+        # Реализация отправки email
+        return True
+
+class SMSNotificationService(NotificationService):
+    def send(self, message: str, recipient: str) -> bool:
+        # Реализация отправки SMS
+        return True
+
+class PushNotificationService(NotificationService):
+    def send(self, message: str, recipient: str) -> bool:
+        # Реализация push-уведомлений
+        return True
+```
+
+## 13.3 Liskov Substitution Principle (LSP)
+
+Подтипы должны быть заменяемы для своих базовых типов.
+
+<span style="color:green">Хорошо</span>
+
+```
+class Bird:
+    def make_sound(self) -> str:
+        return "Some bird sound"
+
+class Sparrow(Bird):
+    def make_sound(self) -> str:
+        return "Chirp chirp"
+
+class Eagle(Bird):
+    def make_sound(self) -> str:
+        return "Screech"
+
+def demonstrate_bird_sounds(birds: list[Bird]) -> None:
+    for bird in birds:
+        print(bird.make_sound())
+
+# Все подтипы могут быть использованы вместо базового класса
+birds = [Sparrow(), Eagle(), Bird()]
+demonstrate_bird_sounds(birds)
+```
+
+## 13.4 Interface Segregation Principle (ISP)
+
+Много специализированных интерфейсов лучше, чем один универсальный.
+
+<span style="color:green">Хорошо</span>
+
+```
+from abc import ABC, abstractmethod
+
+class ReadableRepository(ABC):
+    @abstractmethod
+    def get_by_id(self, id: int):
+        pass
+    
+    @abstractmethod
+    def get_all(self) -> list:
+        pass
+
+class WritableRepository(ABC):
+    @abstractmethod
+    def save(self, entity) -> None:
+        pass
+    
+    @abstractmethod
+    def delete(self, id: int) -> None:
+        pass
+
+class UserRepository(ReadableRepository, WritableRepository):
+    """Реализует только нужные интерфейсы"""
+    
+    def get_by_id(self, id: int):
+        pass
+    
+    def get_all(self) -> list:
+        pass
+    
+    def save(self, entity) -> None:
+        pass
+    
+    def delete(self, id: int) -> None:
+        pass
+```
+
+## 13.5 Dependency Inversion Principle (DIP)
+
+Зависимости на абстракциях, а не на конкретных реализациях.
+
+<span style="color:green">Хорошо</span>
+
+```
+from abc import ABC, abstractmethod
+
+class Database(ABC):
+    """Абстракция базы данных"""
+    
+    @abstractmethod
+    def execute_query(self, query: str) -> list:
+        pass
+
+class MySQLDatabase(Database):
+    """Конкретная реализация для MySQL"""
+    
+    def execute_query(self, query: str) -> list:
+        # Реализация для MySQL
+        pass
+
+class PostgreSQLDatabase(Database):
+    """Конкретная реализация для PostgreSQL"""
+    
+    def execute_query(self, query: str) -> list:
+        # Реализация для PostgreSQL
+        pass
+
+class UserService:
+    """Сервис зависит от абстракции, а не от конкретной реализации"""
+    
+    def __init__(self, database: Database):
+        self.database = database
+    
+    def get_users(self) -> list:
+        return self.database.execute_query("SELECT * FROM users")
+```
+
+# 14. Работа с внешними API и сервисами
+
+## 14.1 Абстракция внешних API
+
+Создавайте абстракции для работы с внешними сервисами.
+
+<span style="color:green">Хорошо</span>
+
+```
+from abc import ABC, abstractmethod
+import requests
+from typing import Optional, Dict, Any
+
+class WeatherAPI(ABC):
+    """Абстрактный интерфейс для Weather API"""
+    
+    @abstractmethod
+    def get_current_weather(self, city: str) -> Dict[str, Any]:
+        pass
+    
+    @abstractmethod
+    def get_forecast(self, city: str, days: int) -> Dict[str, Any]:
+        pass
+
+class OpenWeatherMapService(WeatherAPI):
+    """Реализация для OpenWeatherMap API"""
+    
+    def __init__(self, api_key: str, base_url: str = "https://api.openweathermap.org"):
+        self.api_key = api_key
+        self.base_url = base_url
+        self.session = requests.Session()
+    
+    def get_current_weather(self, city: str) -> Dict[str, Any]:
+        endpoint = f"{self.base_url}/data/2.5/weather"
+        params = {
+            'q': city,
+            'appid': self.api_key,
+            'units': 'metric'
+        }
+        
+        try:
+            response = self.session.get(endpoint, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            raise WeatherAPIError(f"Failed to fetch weather data: {e}")
+    
+    def get_forecast(self, city: str, days: int) -> Dict[str, Any]:
+        endpoint = f"{self.base_url}/data/2.5/forecast"
+        params = {
+            'q': city,
+            'appid': self.api_key,
+            'units': 'metric',
+            'cnt': days * 8  # OpenWeatherMap uses 3-hour intervals
+        }
+        
+        try:
+            response = self.session.get(endpoint, params=params, timeout=10)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            raise WeatherAPIError(f"Failed to fetch forecast: {e}")
+
+class WeatherAPIError(Exception):
+    """Специализированное исключение для ошибок API погоды"""
+    pass
+```
+
+## 14.2 Обработка ошибок и повторные попытки
+
+<span style="color:green">Хорошо</span>
+
+```
+import time
+from typing import Callable, Any
+
+class APIRetryHandler:
+    """Обработчик повторных попыток для API запросов"""
+    
+    def __init__(self, max_retries: int = 3, backoff_factor: float = 1.0):
+        self.max_retries = max_retries
+        self.backoff_factor = backoff_factor
+    
+    def execute_with_retry(self, api_call: Callable[[], Any]) -> Any:
+        """Выполнить API вызов с повторными попытками"""
+        last_exception = None
+        
+        for attempt in range(self.max_retries):
+            try:
+                return api_call()
+            except (requests.RequestException, WeatherAPIError) as e:
+                last_exception = e
+                if attempt < self.max_retries - 1:
+                    sleep_time = self.backoff_factor * (2 ** attempt)
+                    time.sleep(sleep_time)
+                    continue
+                else:
+                    raise last_exception
+
+# Использование
+retry_handler = APIRetryHandler(max_retries=3, backoff_factor=1.0)
+
+def get_weather_safely(service: WeatherAPI, city: str) -> Dict[str, Any]:
+    return retry_handler.execute_with_retry(
+        lambda: service.get_current_weather(city)
+    )
+```
+
+## 14.3 Кэширование и ограничение запросов
+
+<span style="color:green">Хорошо</span>
+
+```
+import time
+from functools import wraps
+from typing import Dict, Any
+
+class RateLimiter:
+    """Ограничитель частоты запросов"""
+    
+    def __init__(self, max_requests: int, time_window: int):
+        self.max_requests = max_requests
+        self.time_window = time_window
+        self.requests = []
+    
+    def acquire(self) -> bool:
+        current_time = time.time()
+        
+        # Удаляем старые запросы
+        self.requests = [req_time for req_time in self.requests 
+                        if current_time - req_time < self.time_window]
+        
+        if len(self.requests) < self.max_requests:
+            self.requests.append(current_time)
+            return True
+        return False
+    
+    def wait_until_available(self) -> None:
+        while not self.acquire():
+            time.sleep(0.1)
+
+def rate_limit(max_requests: int, time_window: int):
+    """Декоратор для ограничения частоты запросов"""
+    limiter = RateLimiter(max_requests, time_window)
+    
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            limiter.wait_until_available()
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+class CachedWeatherService(WeatherAPI):
+    """Сервис погоды с кэшированием"""
+    
+    def __init__(self, weather_service: WeatherAPI, cache_ttl: int = 300):
+        self.weather_service = weather_service
+        self.cache_ttl = cache_ttl
+        self._cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
+    
+    @rate_limit(max_requests=60, time_window=60)  # 60 запросов в минуту
+    def get_current_weather(self, city: str) -> Dict[str, Any]:
+        current_time = time.time()
+        
+        # Проверяем кэш
+        if city in self._cache:
+            cache_time, data = self._cache[city]
+            if current_time - cache_time < self.cache_ttl:
+                return data
+        
+        # Получаем свежие данные
+        data = self.weather_service.get_current_weather(city)
+        self._cache[city] = (current_time, data)
+        return data
+    
+    def get_forecast(self, city: str, days: int) -> Dict[str, Any]:
+        return self.weather_service.get_forecast(city, days)
+```
