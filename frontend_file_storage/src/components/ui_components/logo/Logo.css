@@ -1,0 +1,12 @@
+.logo__text {
+    font-family: 'Montserrat';
+    font-size: 40px;
+    font-weight: 600;
+    color: white;
+    margin-left: 20px;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+}

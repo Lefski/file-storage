@@ -1,0 +1,31 @@
+.custom-button {
+    width: 100%;
+    padding: 12px 0;
+
+    color: white;
+    background: transparent;
+    border: 1px solid rgb(170, 170, 170);
+    border-radius: 10px;
+
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+
+    cursor: pointer;
+    transition: 0.25s ease;
+}
+
+.custom-button:hover {
+    background: #5c2ab9;
+    border: 1px solid rgb(199, 199, 199);
+}
+
+.custom-button:active {
+    transform: scale(0.97);
+}
+
+.custom-button:disabled {
+    background: #5a5a5a;
+    cursor: not-allowed;
+    transform: none;
+}

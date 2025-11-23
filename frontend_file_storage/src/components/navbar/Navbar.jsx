@@ -1,10 +1,11 @@
 import './Navbar.css'
-import SearchComponent from '../ui_components/search-bar/searchComponent'
+import InputField from '../ui_components/search-bar/InputFiled'
 export default function Navbar() {
+
   return (
-    <nav class="navbar">
-      <h1>Файлы</h1>
-      <SearchComponent></SearchComponent>
+    <nav className="navbar">
+      <h1 className=''>Файлы</h1>
+      <InputField></InputField>
     </nav>
   )
 }

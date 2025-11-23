@@ -2,10 +2,53 @@
 
     margin-top: 160px; /* Начинаем под header и navbar */
     margin-left: 200px; /* Отступ для sidebar */
-    width: calc(100% - 200px); /* Ширина минус sidebar */
-    height: calc(100vh - 160px); /* Высота минус header и navbar */
+
     display: flex;
     flex-direction: column;
     /*overflow-y: auto; /* Включаем скролл только для рабочей области */
     background-color: white; /* Для наглядности */
 }
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 15px;
+  padding: 20px;
+}
+
+.board-item {
+  width: 100px;
+  padding: 10px;
+  height: 125px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.board-item:hover {
+  background-color: #D9D9D9;
+}
+
+.file-icon {
+  margin-bottom: 0;
+}
+
+.file-name {
+  width: 100px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  color: black;
+  text-align: center;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* максимум 2 строки */
+  -webkit-box-orient: vertical;
+
+}
+
