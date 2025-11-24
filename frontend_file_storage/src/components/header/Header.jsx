@@ -7,16 +7,13 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Header() {
   const navigate = useNavigate();
-
-  
   async function handleLogout(e) {
-    e.preventDefault();
-    navigate("/login");
   }
-
+  
   return (
     <header className="header">
       <Logo></Logo>
+      
       <div className='user-container'>
         <span className='username'>Пользователь</span>
         <Button type='button' onClick={handleLogout}>Выйти</Button>

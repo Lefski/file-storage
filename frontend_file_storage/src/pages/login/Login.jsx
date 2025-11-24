@@ -1,86 +1,28 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '../../api/api';
-import './Login.css';
-import InputField from '../../components/ui_components/search-bar/InputFiled';
+import { register } from '../../api/services';
 import Logo from '../../components/ui_components/logo/Logo';
 import Button from '../../components/ui_components/button/Button';
+import SignInForm from './SignInForm';
+import SignUpForm from './SignUpForm';
+import './Login.css';
 
-export default function Login({ onLogin }) {
+export default function Login() {
     const [isLogin, setIsLogin] = useState(true);
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [error, setError] = useState("");
-
-    const navigate = useNavigate();
-
-    async function handleSubmit(e) {
-        e.preventDefault();
-        setError("");
-
-        const url = isLogin ? "/api/login" : "/api/register";
-
-        try {
-            const res = await api.post(url, {
-                email,
-                password
-            });
-            console.log(res);
-
-            if (res.data.access_token) {
-                console.log(res.data.access_token);
-                localStorage.setItem("access_token", res.data.access_token);
-            }
-            onLogin();      
-            navigate("/main");
-
-        } catch (err) {
-            if (err.response?.data?.message) {
-                setError(err.response.data.message);
-            } else {
-                setError("Ошибка соединения с сервером");
-            }
-        }
-    }
 
     return (
         <div className='main-container'>
             <div className='form-container'>
                 <Logo></Logo>
-                <form className="form" onSubmit={handleSubmit}>
-                    <InputField
-                        className='email'
-                        type='email'
-                        placeholder=" Email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                    />
 
-                    <InputField
-                        className='password'
-                        type='password'
-                        placeholder=" Пароль"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                    />
+                {isLogin? (<SignInForm/>) : 
+                (<SignUpForm/>)}
 
-
-                    {error && <p className="error">{error}</p>}
-
-                    <Button type="submit">
-                        {isLogin ? "Войти" : "Зарегистрироваться"}
-                    </Button>
-
-                    <label className='form-label'>
-                        {isLogin ? "Не зарегистрированы?" : "Уже есть аккаунт?"}
-                    </label>
-
-                    <Button onClick={() => setIsLogin(!isLogin)}>
-                        {isLogin ? "Регистрация" : "Войти"}
-                    </Button>
-                </form>
+                <label className='form-label'>
+                    {isLogin ? "Не зарегистрированы?" : "Уже есть аккаунт?"}
+                </label>
+                <Button onClick={() => setIsLogin(!isLogin)}>
+                    {isLogin ? "Регистрация" : "Войти"}
+                </Button>
             </div>
         </div>
     );

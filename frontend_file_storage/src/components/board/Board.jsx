@@ -1,12 +1,11 @@
 import React from "react";
 import "./Board.css";
-
+import api from "../../api/api";
 import FileIcon from "./File.png";
 import ImageFileIcon from "./Image_File.png";
 import FolderIcon from "./Folder.png";
 import DocumentIcon from "./Document.png";
 
-// Данные файлов
 const files = [
   { id: 1, name: "Документ.pdf", type: "document" },
   { id: 2, name: "Фото.jpg", type: "image" },
@@ -14,7 +13,6 @@ const files = [
   { id: 4, name: "Музыка.mp3", type: "file" },
 ];
 
-// Функция для выбора иконки по типу
 const getIcon = (type) => {
   switch(type) {
     case "folder": return FolderIcon;
@@ -24,6 +22,7 @@ const getIcon = (type) => {
     default: return FileIcon;
   }
 }
+
 
 export default function Board() {
   return (
