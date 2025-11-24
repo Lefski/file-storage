@@ -62,3 +62,14 @@ export const register = async (email, username, password) => {
         }
     }
 }
+
+export const logout = async () => {
+    try {
+        const res = await api.get("/api/logout");
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
+    } catch (err) {
+        console.error("Ошибка API:", err);
+        throw new Error("Ошибка соединения с сервером");
+    }
+}
