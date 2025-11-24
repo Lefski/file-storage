@@ -7,7 +7,6 @@ export const getUserData = async () => {
         return res.data;  
     } catch (err) {
         console.error("Ошибка API:", err);
-        throw new Error("Ошибка получения данных пользователя");
     }
 }
 
@@ -65,11 +64,25 @@ export const register = async (email, username, password) => {
 
 export const logout = async () => {
     try {
-        const res = await api.get("/api/logout");
+        let refresh_token = localStorage.getItem("refresh_token");
+        const res = await api.post("/api/logout", {
+            refresh_token
+        });
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
+        console.log(res.data)
+        return res.data;  
     } catch (err) {
         console.error("Ошибка API:", err);
-        throw new Error("Ошибка соединения с сервером");
+    }
+}
+
+export const getUserFiles = async () => {
+    try {
+        const res = await api.get("api/files");
+        console.log(res.data);
+        return res.data;
+    } catch (err) {
+        console.error("Ошибка API:", err);
     }
 }
