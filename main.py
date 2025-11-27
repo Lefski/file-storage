@@ -1,7 +1,7 @@
 # Импортируем необходимые модули и классы из FastAPI для создания API,
 # работы с зависимостями, обработки ошибок, работы с HTTP-запросами и шаблонами.
 # Также импортируем модули для работы с базой данных, моделями и утилитами аутентификации.
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Form, UploadFile, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Form, UploadFile, Query, Response, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.templating import Jinja2Templates
@@ -13,7 +13,7 @@ import models
 import auth_utils
 from dependencies.services import get_file_service, get_quota_service
 from database import get_db
-from models import UserCreate, UserLogin, UserResponse, Token, UserRole
+from models import UserCreate, UserLogin, UserResponse, Token, UserRole, RefreshToken, FileRenameRequest, UserQuotaUpdate, AdminUserListResponse
 from datetime import timedelta, datetime
 from typing import List, Optional, Callable
 from file_models import Files, FileInfoResponse, FileRename, Folder, FolderCreate, FolderResponse, FileMove
@@ -21,6 +21,11 @@ from chain_of_duties import (AuthCheckHandler, QuotaCheckHandler, FileTypeCheckH
     AuthDeleteCheckHandler, FileAccessCheckHandler, DeleteFileHandler,
     AuthFolderCheckHandler, NameFolderCheckHandler, ParentFolderCheckHandler, CreateFolderHandler,
     AuthMoveCheckHandler, FileMoveCheckHandler, FolderMoveCheckHandler, UpdateMoveHandler)
+
+from services.file_service import FileService
+from services.quota_service import QuotaService
+from dependencies.services import get_file_service, get_quota_service
+
 import file_utils
 import os
 import shutil
@@ -80,6 +85,17 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
         return None
 
     user = db.query(models.User).filter(models.User.email == email).first()
+    return user
+
+async def get_current_admin(
+    user: models.User = Depends(get_current_user)
+) -> models.User:
+    """Зависимость для проверки прав администратора"""
+    if user.role != "admin":  # Предполагаем, что в модели User есть поле role
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав"
+        )
     return user
 
 # --- HTML-страницы ---
