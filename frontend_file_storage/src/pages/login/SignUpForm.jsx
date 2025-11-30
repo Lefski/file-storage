@@ -3,7 +3,7 @@ import InputField from '../../components/ui_components/search-bar/InputFiled'
 import Button from '../../components/ui_components/button/Button'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom';
-import { register } from '../../api/services';
+import { register, login } from '../../api/services';
 
 export default function SignUpForm({handleRegister}) {
     const [username, setUsername] = useState("");
@@ -19,7 +19,8 @@ export default function SignUpForm({handleRegister}) {
 
         try {
             if (password == password2) {
-                await register(email, password);
+                await register(email, username, password);
+                await login(email, password)
                 navigate("/main");
             } else {
                 throw new Error("Пароли не совпадают!")

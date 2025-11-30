@@ -8,11 +8,10 @@ import './Mainpage.css'
 export default function Mainpage() {
   return (
     <>
-        <Header/>
-        <Navbar />
-        <Sidebar />
-        <button className='special' onClick={getUserData}>апи</button>
-        <Board />
+      <Header/>
+      <Navbar />
+      <Sidebar />
+      <Board />
     </>
   )
 }

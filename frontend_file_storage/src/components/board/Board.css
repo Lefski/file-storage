@@ -1,12 +1,18 @@
 .board {
 
-    margin-top: 160px; /* Начинаем под header и navbar */
+    margin-top: 10px; /* Начинаем под header и navbar */
     margin-left: 200px; /* Отступ для sidebar */
 
     display: flex;
     flex-direction: column;
     /*overflow-y: auto; /* Включаем скролл только для рабочей области */
     background-color: white; /* Для наглядности */
+}
+
+.view-toggle {
+    margin-top: 160px; /* Начинаем под header и navbar */
+    margin-left: 200px; /* Отступ для sidebar */
+
 }
 
 .board {
@@ -52,3 +58,52 @@
 
 }
 
+/* Grid уже есть */
+.grid-view {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 15px;
+}
+
+/* Список */
+.list-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.list-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  width: 95%;
+  height: 50px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.list-item:hover {
+  background-color: #D9D9D9;
+}
+
+.list-item .file-icon {
+  width: 30px;
+  height: 30px;
+  margin-right: 10px;
+}
+
+.list-item .file-name {
+  font-size: 14px;
+  text-align: left;
+}
+
+.file-info {
+  margin-left: 880px;
+  display: flex;
+  gap: 15px;
+  font-size: 12px;
+  color: #555;
+}
