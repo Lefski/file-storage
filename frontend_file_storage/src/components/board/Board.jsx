@@ -1,10 +1,11 @@
-import React from "react";
+import React, {useState, useEffect} from "react";
 import "./Board.css";
-import api from "../../api/api";
+import { getUserFiles } from "../../api/services";
 import FileIcon from "./File.png";
 import ImageFileIcon from "./Image_File.png";
 import FolderIcon from "./Folder.png";
 import DocumentIcon from "./Document.png";
+
 
 const files = [
   { id: 1, name: "Документ.pdf", type: "document" },
@@ -25,6 +26,20 @@ const getIcon = (type) => {
 
 
 export default function Board() {
+  const [userFiles, setUserFiles] = useState([]);
+    useEffect(() => {
+      async function fetchUserFiles() {
+        try {
+          const files = await getUserFiles();   // ожидаем данные
+          setUserFiles(user.username);         // сохраняем имя
+        } catch (err) {
+          console.error(err);
+        }
+      }
+  
+      fetchUserFiles();
+    }, []);
+
   return (
     <div className="board">
       {files.map(file => (
