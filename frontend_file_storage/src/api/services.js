@@ -3,8 +3,8 @@ import api from "./api";
 export const getUserData = async () => {
     try {
         const res = await api.get("/api/me"); 
-        console.log(res.data)
-        return res.data;  
+        //console.log(res)
+        return res;  
     } catch (err) {
         console.error("Ошибка API:", err);
     }
@@ -18,7 +18,7 @@ export const login = async (email, password) => {
         });
         //console.log(res);
         if (res.data.access_token) {
-            console.log(res.data.access_token);
+            //console.log(res.data.access_token);
             localStorage.setItem("access_token", res.data.access_token);
         }
         if (res.data.refresh_token) {
@@ -38,15 +38,18 @@ export const login = async (email, password) => {
 
 export const register = async (email, username, password) => {
     try {
-        const res = await api.post("/api/register", {
+        var user_data = {
             email,
             username,
             password
-        });
+        }
+        console.log(user_data);
+        
+        const res = await api.post("/api/register", user_data);
         //console.log(res);
 
         if (res.data.access_token) {
-            console.log(res.data.access_token);
+            //console.log(res.data.access_token);
             localStorage.setItem("access_token", res.data.access_token);
         }
         if (res.data.refresh_token) {

@@ -7,10 +7,10 @@ import './Mainpage.css'
 export default function Mainpage() {
   return (
     <>
-        <Header/>
-        <Navbar />
-        <Sidebar />
-        <Board />
+      <Header/>
+      <Navbar />
+      <Sidebar />
+      <Board />
     </>
   )
 }

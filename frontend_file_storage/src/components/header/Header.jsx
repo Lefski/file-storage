@@ -23,7 +23,7 @@ export default function Header() {
     async function fetchUser() {
       try {
         const user = await getUserData();   // ожидаем данные
-        setUsername(user.username);         // сохраняем имя
+        setUsername(user.data.username);         // сохраняем имя
       } catch (err) {
         console.error(err);
       }
